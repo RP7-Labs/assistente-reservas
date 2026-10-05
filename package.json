@@ -1,0 +1,17 @@
+{
+  "name": "assistente-reservas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Assistente de reservas com IA para o canal direto de hotéis pequenos",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "express": "^4.21.0"
+  },
+  "engines": { "node": ">=20" }
+}

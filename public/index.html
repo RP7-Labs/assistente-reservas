@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistente de Reservas</title>
+<style>
+  :root { --bg:#f5f5f4; --card:#fff; --tx:#1c1917; --mut:#78716c; --me:#0f766e; --bot:#e7e5e4; }
+  * { box-sizing:border-box } body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--tx) }
+  main { max-width:520px; margin:0 auto; height:100dvh; display:flex; flex-direction:column; padding:16px }
+  h1 { font-size:17px; margin:0 0 8px } #log { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 0 }
+  .m { max-width:85%; padding:8px 12px; border-radius:14px; white-space:pre-wrap; word-break:break-word }
+  .eu { align-self:flex-end; background:var(--me); color:#fff } .bot { align-self:flex-start; background:var(--bot) }
+  .ev { align-self:center; font-size:12px; color:var(--mut) } a { color:inherit }
+  form { display:flex; gap:8px } input { flex:1; padding:10px 12px; border:1px solid #d6d3d1; border-radius:10px; font:inherit }
+  button { padding:10px 16px; border:0; border-radius:10px; background:var(--me); color:#fff; font:inherit }
+</style>
+</head>
+<body>
+<main>
+  <h1>Assistente de Reservas</h1>
+  <div id="log"><div class="m bot">Olá! Posso te ajudar a reservar. Qual quarto e quais datas você procura?</div></div>
+  <form id="f"><input id="t" autocomplete="off" placeholder="Digite sua mensagem"><button>Enviar</button></form>
+</main>
+<script>
+const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
+const log = document.getElementById("log"), t = document.getElementById("t");
+function add(cls, txt) {
+  const d = document.createElement("div"); d.className = "m " + cls;
+  d.innerHTML = txt.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))
+                   .replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+}
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault(); const texto = t.value.trim(); if (!texto) return;
+  add("eu", texto); t.value = "";
+  try {
+    const r = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ conversaId:id, texto }) });
+    const j = await r.json();
+    add("bot", j.resposta || j.erro || "Erro");
+    for (const ev of j.eventos || []) add("ev", ev.tipo === "link" ? `link gerado: ${ev.quarto}` : `encaminhado ao atendente: ${ev.motivo}`);
+  } catch { add("bot", "Falha de conexão."); }
+};
+</script>
+</body>
+</html>
