@@ -8,7 +8,7 @@ export function rotasWhatsapp(app) {
   });
 
   app.post("/webhook/whatsapp", async (req, res) => {
-    res.sendStatus(200); // responde rápido; a Meta reenvia se demorar
+    // Processa antes de responder: na Vercel a função é congelada depois da resposta
     const msgs = req.body?.entry?.flatMap((e) => e.changes ?? []).flatMap((c) => c.value?.messages ?? []) ?? [];
     for (const m of msgs) {
       if (m.type !== "text") continue;
@@ -19,6 +19,7 @@ export function rotasWhatsapp(app) {
         console.error("Erro no WhatsApp:", err);
       }
     }
+    res.sendStatus(200);
   });
 }
 

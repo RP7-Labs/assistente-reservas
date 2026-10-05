@@ -1,12 +1,9 @@
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+// Import estático para o arquivo entrar no pacote da Vercel
+import hotelPadrao from "../data/hotel.json" with { type: "json" };
 
-const aqui = path.dirname(fileURLToPath(import.meta.url));
-const ARQUIVO = process.env.HOTEL_FILE || path.join(aqui, "..", "data", "hotel.json");
-
-export function carregarHotel(arquivo = ARQUIVO) {
-  return JSON.parse(fs.readFileSync(arquivo, "utf8"));
+export function carregarHotel(arquivo = process.env.HOTEL_FILE) {
+  return arquivo ? JSON.parse(fs.readFileSync(arquivo, "utf8")) : hotelPadrao;
 }
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;

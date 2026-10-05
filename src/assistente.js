@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
-import { criarLead } from "./store.js";
+import { criarLead, carregarConversa, salvarConversa } from "./store.js";
 
 const MODELO = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const MAX_RODADAS = 6;
@@ -10,9 +10,6 @@ function cliente() {
   client ??= new Anthropic();
   return client;
 }
-
-// Histórico por conversa (memória do processo; suficiente para o piloto)
-const conversas = new Map();
 
 function promptSistema(hotel) {
   const hoje = new Date().toISOString().slice(0, 10);
@@ -63,11 +60,11 @@ const FERRAMENTAS = [
   },
 ];
 
-function executarFerramenta(nome, entrada, ctx) {
+async function executarFerramenta(nome, entrada, ctx) {
   if (nome === "gerar_link_reserva") {
     const v = validarPedido(ctx.hotel, entrada);
     if (!v.ok) return { conteudo: JSON.stringify({ erro: v.erro }), erro: true };
-    const lead = criarLead({ canal: ctx.canal, conversa_id: ctx.conversaId, quarto_id: v.quarto.id, ...entrada, noites: v.noites });
+    const lead = await criarLead({ canal: ctx.canal, conversa_id: ctx.conversaId, quarto_id: v.quarto.id, ...entrada, noites: v.noites });
     const linkMotor = montarLinkMotor(ctx.hotel, v.quarto, entrada, lead.id);
     // Link curto que passa pelo nosso servidor para contar o clique
     const link = ctx.publicUrl ? `${ctx.publicUrl}/r/${lead.id}` : linkMotor;
@@ -83,7 +80,7 @@ function executarFerramenta(nome, entrada, ctx) {
 
 export async function responder({ conversaId, texto, canal = "web", publicUrl = process.env.PUBLIC_URL }) {
   const hotel = carregarHotel();
-  const historico = conversas.get(conversaId) ?? [];
+  const historico = await carregarConversa(conversaId);
   historico.push({ role: "user", content: texto });
   const ctx = { hotel, canal, conversaId, publicUrl, eventos: [] };
 
@@ -103,20 +100,22 @@ export async function responder({ conversaId, texto, canal = "web", publicUrl = 
 
     if (resp.stop_reason === "refusal") break;
     if (resp.stop_reason !== "tool_use") {
-      conversas.set(conversaId, historico);
+      await salvarConversa(conversaId, canal, historico);
       const resposta = resp.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
       return { resposta, eventos: ctx.eventos };
     }
 
-    const resultados = resp.content
-      .filter((b) => b.type === "tool_use")
-      .map((b) => {
-        const r = executarFerramenta(b.name, b.input, ctx);
-        return { type: "tool_result", tool_use_id: b.id, content: r.conteudo, ...(r.erro ? { is_error: true } : {}) };
-      });
+    const resultados = await Promise.all(
+      resp.content
+        .filter((b) => b.type === "tool_use")
+        .map(async (b) => {
+          const r = await executarFerramenta(b.name, b.input, ctx);
+          return { type: "tool_result", tool_use_id: b.id, content: r.conteudo, ...(r.erro ? { is_error: true } : {}) };
+        }),
+    );
     historico.push({ role: "user", content: resultados });
   }
 
-  conversas.set(conversaId, historico);
+  await salvarConversa(conversaId, canal, historico);
   return { resposta: "Desculpe, não consegui concluir agora. Vou chamar um atendente para te ajudar.", eventos: [...ctx.eventos, { tipo: "atendente", motivo: "falha do assistente" }] };
 }
