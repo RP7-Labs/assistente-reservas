@@ -7,7 +7,7 @@ import {
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
 } from "./store.js";
-import { modoEmail } from "./email.js";
+import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento } from "./pagamento.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
@@ -183,4 +183,13 @@ admin.post("/pagamentos/:lead/:acao", rota(async (req, res) => {
   const lead = await buscarLead(pag.lead_id);
   if (lead) await emailPagamento(carregarHotel(), lead, salvo, salvo.status);
   res.json({ ok: true });
+}));
+
+// Manda um e-mail de teste para o admin logado e devolve o erro do provedor, se houver
+admin.post("/email-teste", rota(async (req, res) => {
+  const r = await enviarEmail({
+    para: req.admin.email, tipo: "teste", assunto: "Teste de e-mail – back-office de reservas",
+    texto: `Olá, ${req.admin.nome}!\n\nSe você recebeu este e-mail, o envio está funcionando.`,
+  });
+  res.json({ ...r, para: req.admin.email, remetente: process.env.EMAIL_FROM || null });
 }));

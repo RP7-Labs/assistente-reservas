@@ -123,7 +123,9 @@
       <tbody id="tbPag"></tbody>
     </table></div>
     <p class="aviso">Checkout simulado: nada é cobrado. Cartão fica pré-autorizado até você capturar (cobrar) ou liberar (cancela a reserva). Quem preenche os dados e não paga em 5 minutos recebe o link por e-mail.</p>
-    <h2>E-mails enviados <span class="mut" id="modoEmail"></span></h2>
+    <h2 style="display:flex;align-items:center;gap:10px">E-mails enviados <span class="mut" id="modoEmail"></span>
+      <button class="btn" id="emailTeste" style="margin-left:auto">Enviar e-mail de teste</button></h2>
+    <div class="aviso" id="emailTesteRes" hidden></div>
     <div class="lista" id="listaEmails"></div>
   </section>
 
@@ -343,7 +345,7 @@ function desenharLoc() {
 const TIPO_EMAIL = {
   lembrete_pagamento: "Lembrete", reserva_confirmada: "Reserva confirmada", confirmacao: "Confirmação",
   pagamento_pago: "Pagamento confirmado", pagamento_capturado: "Pagamento confirmado",
-  pagamento_pre_autorizado: "Pré-autorização", pagamento_liberado: "Cancelamento",
+  pagamento_pre_autorizado: "Pré-autorização", pagamento_liberado: "Cancelamento", teste: "Teste",
 };
 async function carregarPagamentos() {
   const r = await api("/pagamentos");
@@ -442,6 +444,16 @@ $("#fAtend").onchange = desenharAtend;
 $("#fLoc").onchange = desenharLoc;
 $("#dataQuartos").onchange = () => carregarQuartos().catch((err) => alert(err.message));
 $("#novaReserva").onclick = () => abrirReserva(null);
+$("#emailTeste").onclick = async () => {
+  const el = $("#emailTesteRes"); el.hidden = false; el.textContent = "Enviando...";
+  try {
+    const r = await api("/email-teste", { method: "POST" });
+    el.textContent = r.provedor === "simulado" ? "Modo simulado: falta RESEND_API_KEY e EMAIL_FROM na Vercel. Nada foi enviado."
+      : r.ok ? `Enviado para ${r.para} (remetente ${r.remetente}). Confira a caixa de entrada e o spam.`
+      : `A Resend recusou o envio para ${r.para} (remetente ${r.remetente}): ${r.erro}`;
+    await carregarPagamentos();
+  } catch (err) { el.textContent = err.message; }
+};
 $("#formLogin").addEventListener("submit", enviarLogin);
 $("#sair").onclick = sair;
 $("#recarregar").onclick = () => carregar().catch((err) => alert(err.message));
