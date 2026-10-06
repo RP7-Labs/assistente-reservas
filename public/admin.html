@@ -340,6 +340,11 @@ function desenharLoc() {
   }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhuma locação.</td></tr>`;
 }
 
+const TIPO_EMAIL = {
+  lembrete_pagamento: "Lembrete", reserva_confirmada: "Reserva confirmada", confirmacao: "Confirmação",
+  pagamento_pago: "Pagamento confirmado", pagamento_capturado: "Pagamento confirmado",
+  pagamento_pre_autorizado: "Pré-autorização", pagamento_liberado: "Cancelamento",
+};
 async function carregarPagamentos() {
   const r = await api("/pagamentos");
   $("#tbPag").innerHTML = r.pagamentos.length ? r.pagamentos.map((p) => {
@@ -352,7 +357,7 @@ async function carregarPagamentos() {
   }).join("") : `<tr><td colspan="8" class="mut" style="text-align:center">Nenhum pagamento ainda.</td></tr>`;
   $("#modoEmail").textContent = r.modo_email === "resend" ? "· enviados pela Resend" : "· modo simulado: ninguém recebe, ficam só aqui";
   $("#listaEmails").innerHTML = r.emails.length ? r.emails.map((m) =>
-    `<details class="item" style="display:block"><summary><span class="tag">${esc(m.tipo === "lembrete_pagamento" ? "Lembrete" : m.tipo === "confirmacao" ? "Confirmação" : m.tipo || "e-mail")}</span>
+    `<details class="item" style="display:block"><summary><span class="tag">${esc(TIPO_EMAIL[m.tipo] || m.tipo || "e-mail")}</span>
       <strong>${esc(m.para)}</strong> · ${esc(m.assunto)} <span class="mut">· ${quando(m.criado_em)}</span>${m.erro ? ` <span class="tag t-err">falhou</span>` : ""}</summary>
       <div class="fala" style="white-space:pre-wrap;margin-top:8px">${esc(m.corpo)}</div>${m.erro ? `<div class="erro">${esc(m.erro)}</div>` : ""}</details>`).join("")
     : `<div class="vazio">Nenhum e-mail enviado.</div>`;

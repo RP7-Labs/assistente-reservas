@@ -57,7 +57,7 @@ O link do chat (`/r/:id`) leva para `/pagamento`, onde o hóspede confirma os da
 - **Cartão de crédito**: pré-autorização do valor total. No back-office (aba Pagamentos) o hotel **captura** (cobra) ou **libera** (cancela a reserva). Cartão de teste aprovado: 4111 1111 1111 1111; recusado: 4000 0000 0000 0002. O número do cartão nunca é gravado, só os 4 últimos dígitos.
 - **Pix**: gera um código copia e cola de teste e um botão "Simular pagamento recebido".
 
-Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda e-mail de confirmação. `CHECKOUT_MODO=motor` volta a mandar o link para o motor de reservas.
+Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda dois e-mails: pagamento confirmado (ou pré-autorização aprovada, no cartão) e reserva confirmada. Capturar o cartão manda "pagamento confirmado"; liberar manda o aviso de cancelamento. `CHECKOUT_MODO=motor` volta a mandar o link para o motor de reservas.
 
 **Lembrete por e-mail:** quem preenche os dados e não paga em 5 minutos recebe o link de pagamento por e-mail (uma vez).
 

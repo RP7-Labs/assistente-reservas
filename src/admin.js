@@ -5,9 +5,10 @@ import { carregarHotel } from "./catalogo.js";
 import {
   listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
-  listarPagamentos, buscarPagamento, salvarPagamento, listarEmails,
+  listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
 } from "./store.js";
 import { modoEmail } from "./email.js";
+import { emailPagamento } from "./pagamento.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
@@ -177,7 +178,9 @@ admin.post("/pagamentos/:lead/:acao", rota(async (req, res) => {
   const pag = await buscarPagamento(req.params.lead);
   if (!pag) return res.status(404).json({ erro: "Pagamento não encontrado" });
   if (pag.status !== "pre_autorizado") return res.status(409).json({ erro: "Só pré-autorizações podem ser capturadas ou liberadas" });
-  await salvarPagamento({ ...pag, status: acao === "capturar" ? "capturado" : "liberado" });
+  const salvo = await salvarPagamento({ ...pag, status: acao === "capturar" ? "capturado" : "liberado" });
   if (acao === "liberar" && pag.codigo_reserva) await atualizarStatusReserva(pag.codigo_reserva, "cancelada");
+  const lead = await buscarLead(pag.lead_id);
+  if (lead) await emailPagamento(carregarHotel(), lead, salvo, salvo.status);
   res.json({ ok: true });
 }));

@@ -81,6 +81,41 @@ const br = (d) => d.split("-").reverse().join("/");
 const reais = (v) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 // Confirma a reserva depois do pagamento aprovado e avisa o hóspede por e-mail
+const pessoas = (r) => `${r.adultos} adulto${r.adultos > 1 ? "s" : ""}${r.criancas ? ` e ${r.criancas} criança${r.criancas > 1 ? "s" : ""}` : ""}`;
+const AVISO_TESTE = "\n\n(Ambiente de testes: nenhum valor foi cobrado de verdade.)";
+
+// E-mails ao hóspede sobre o pagamento: pix pago, cartão pré-autorizado, capturado ou liberado
+export async function emailPagamento(hotel, lead, pag, evento) {
+  if (!pag.email) return;
+  const r = resumoPedido(hotel, lead);
+  const cartao = `cartão ${pag.cartao_bandeira ?? ""} final ${pag.cartao_final ?? ""}`.replace(/\s+/g, " ");
+  const m = {
+    pago: [`Pagamento confirmado – reserva ${pag.codigo_reserva}`, `Recebemos seu pagamento de ${reais(r.total)} por Pix.`],
+    pre_autorizado: [`Pré-autorização aprovada – reserva ${pag.codigo_reserva}`,
+      `A pré-autorização de ${reais(r.total)} no ${cartao} foi aprovada. O valor fica reservado no limite do cartão e será cobrado pelo hotel; você receberá outro e-mail quando isso acontecer.`],
+    capturado: [`Pagamento confirmado – reserva ${pag.codigo_reserva}`, `O valor de ${reais(r.total)} foi cobrado no ${cartao}. Pagamento concluído.`],
+    liberado: [`Reserva ${pag.codigo_reserva} cancelada – pré-autorização liberada`,
+      `Sua reserva foi cancelada e a pré-autorização de ${reais(r.total)} no ${cartao} foi liberada. Nada foi cobrado.`],
+  }[evento];
+  if (!m) return;
+  await enviarEmail({
+    para: pag.email, tipo: `pagamento_${evento}`, leadId: lead.id, assunto: `${m[0]} – ${hotel.nome}`,
+    texto: `Olá, ${pag.nome}!\n\n${m[1]}\n\nCódigo da reserva: ${pag.codigo_reserva}\nValor: ${reais(r.total)}\n\n${hotel.nome}${AVISO_TESTE}`,
+  });
+}
+
+// E-mail com os dados da reserva confirmada
+async function emailReserva(hotel, lead, pag) {
+  if (!pag.email) return;
+  const r = resumoPedido(hotel, lead);
+  await enviarEmail({
+    para: pag.email, tipo: "reserva_confirmada", leadId: lead.id,
+    assunto: `Reserva ${pag.codigo_reserva} confirmada – ${hotel.nome}`,
+    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${hotel.politicas}\n\nAté breve!\n${hotel.nome}${AVISO_TESTE}`,
+  });
+}
+
+// Confirma a reserva depois do pagamento aprovado e manda os dois e-mails: pagamento e reserva
 async function confirmar(hotel, lead, pag, campos) {
   const codigo = pag.codigo_reserva || `P-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
   const r = resumoPedido(hotel, lead);
@@ -89,14 +124,8 @@ async function confirmar(hotel, lead, pag, campos) {
     hospede: pag.nome, valor: r.total, status: "confirmada",
   });
   const salvo = await salvarPagamento({ ...pag, ...campos, codigo_reserva: codigo, pago_em: new Date().toISOString() });
-  if (pag.email) {
-    const como = campos.metodo === "cartao" ? `pré-autorização no cartão ${campos.cartao_bandeira} final ${campos.cartao_final}` : "Pix";
-    await enviarEmail({
-      para: pag.email, tipo: "confirmacao", leadId: lead.id,
-      assunto: `Reserva ${codigo} confirmada – ${hotel.nome}`,
-      texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\n${r.quarto}, de ${br(r.checkin)} a ${br(r.checkout)} (${r.noites} noites).\nValor: ${reais(r.total)} (${como}).\nCódigo: ${codigo}\n\nCheck-in a partir das ${hotel.checkin}.\n\n${hotel.nome}\n\n(Ambiente de testes: nenhum valor foi cobrado.)`,
-    });
-  }
+  await emailPagamento(hotel, lead, salvo, salvo.status);
+  await emailReserva(hotel, lead, salvo);
   return salvo;
 }
 
