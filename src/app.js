@@ -1,7 +1,7 @@
 import express from "express";
 import { responder } from "./assistente.js";
 import { carregarHotel, montarLinkMotor } from "./catalogo.js";
-import { buscarLead, registrarClique, resumo } from "./store.js";
+import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
 
 export const app = express();
@@ -16,6 +16,23 @@ app.get("/api/status", (_req, res) => {
     public_url: process.env.PUBLIC_URL || null,
     whatsapp: tem("WHATSAPP_TOKEN") && tem("WHATSAPP_PHONE_NUMBER_ID"),
   });
+});
+
+// Saúde dos serviços, usada pela página /status.
+// estado: "ok" | "pendente" (falta configurar) | "erro"
+app.get("/api/health", async (_req, res) => {
+  const banco = await verificarBanco();
+  const config = (nome, ...vars) => {
+    const ok = vars.every((v) => process.env[v]);
+    return { nome, estado: ok ? "ok" : "pendente", detalhe: ok ? "configurado" : `falta ${vars.filter((v) => !process.env[v]).join(", ")}` };
+  };
+  const servicos = [
+    { nome: "banco", estado: banco.ok ? "ok" : "erro", detalhe: banco.detalhe, ms: banco.ms },
+    config("ia", "ANTHROPIC_API_KEY"),
+    config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
+    config("rastreio", "PUBLIC_URL"),
+  ];
+  res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
 });
 
 app.post("/api/chat", async (req, res) => {

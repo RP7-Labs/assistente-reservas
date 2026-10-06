@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status dos serviços</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --tx:#e2e8f0; --mut:#64748b; --ok:#4ade80; --warn:#facc15; --err:#f87171; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--tx); font:16px/1.4 system-ui,-apple-system,sans-serif }
+  main { max-width:800px; margin:0 auto; padding:40px 16px }
+  h1 { font-size:26px; margin:0 0 6px }
+  #resumo { margin:0 0 32px; font-size:17px }
+  h2 { font-size:13px; letter-spacing:.08em; color:var(--mut); font-weight:600; margin:24px 0 10px; text-transform:uppercase }
+  .item { display:flex; align-items:center; gap:14px; background:var(--card); border-radius:8px; padding:16px 20px; margin-bottom:10px }
+  .dot { width:12px; height:12px; border-radius:50%; flex:none; background:var(--mut) }
+  .nome { font-weight:600; font-size:18px }
+  .rota { font:13px ui-monospace,monospace; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .info { margin-left:auto; color:#94a3b8; font-size:14px; text-align:right; white-space:nowrap }
+  .ok .dot { background:var(--ok) } .pendente .dot { background:var(--warn) } .erro .dot { background:var(--err) }
+  footer { text-align:center; color:var(--mut); font-size:14px; margin-top:36px }
+  @media (max-width:560px) { .rota { display:none } .item { padding:14px } .nome { font-size:16px } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Assistente de Reservas — Status dos serviços</h1>
+  <p id="resumo">Verificando…</p>
+  <h2>Backend</h2>
+  <div id="backend"></div>
+  <h2>Canais e integrações</h2>
+  <div id="canais"></div>
+  <footer id="rodape"></footer>
+</main>
+<script>
+const INTERVALO = 15000;
+const BACKEND = [
+  { id: "api", nome: "API", rota: "/api/health" },
+  { id: "banco", nome: "Banco de dados", rota: "Postgres" },
+  { id: "metricas", nome: "Métricas", rota: "/api/metricas" },
+];
+const CANAIS = [
+  { id: "web", nome: "Chat web", rota: "/" },
+  { id: "ia", nome: "Assistente IA", rota: "Claude" },
+  { id: "rastreio", nome: "Links rastreáveis", rota: "/r/:id" },
+  { id: "whatsapp", nome: "WhatsApp", rota: "/webhook/whatsapp" },
+];
+
+function montar(alvo, lista) {
+  document.getElementById(alvo).innerHTML = lista.map(s =>
+    `<div class="item" id="s-${s.id}"><span class="dot"></span><span class="nome">${s.nome}</span>` +
+    `<span class="rota">${s.rota}</span><span class="info">…</span></div>`).join("");
+}
+function marcar(id, estado, info) {
+  const el = document.getElementById("s-" + id);
+  el.className = "item " + estado;
+  el.querySelector(".info").textContent = info;
+}
+async function medir(url) {
+  const t = performance.now();
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    return { ok: r.ok, status: r.status, ms: Math.round(performance.now() - t), corpo: r.headers.get("content-type")?.includes("json") ? await r.json() : null };
+  } catch { return { ok: false, status: 0, ms: Math.round(performance.now() - t), corpo: null }; }
+}
+const http = (r) => r.status ? `HTTP ${r.status} · ${r.ms}ms` : "sem resposta";
+
+async function atualizar() {
+  const [health, metricas, web] = await Promise.all([medir("/api/health"), medir("/api/metricas"), medir("/")]);
+  marcar("api", health.status ? "ok" : "erro", http(health));
+  marcar("metricas", metricas.ok ? "ok" : "erro", http(metricas));
+  marcar("web", web.ok ? "ok" : "erro", http(web));
+
+  const servicos = Object.fromEntries((health.corpo?.servicos || []).map(s => [s.nome, s]));
+  for (const id of ["banco", "ia", "rastreio", "whatsapp"]) {
+    const s = servicos[id];
+    if (!s) { marcar(id, "erro", "sem dados"); continue; }
+    marcar(id, s.estado, s.estado === "ok" ? (s.ms != null ? `${s.detalhe} · ${s.ms}ms` : s.detalhe) : s.detalhe);
+  }
+
+  const itens = [...document.querySelectorAll(".item")];
+  const ok = itens.filter(e => e.classList.contains("ok")).length;
+  const erros = itens.filter(e => e.classList.contains("erro")).length;
+  const resumo = document.getElementById("resumo");
+  resumo.textContent = `${ok}/${itens.length} serviços no ar` + (erros ? ` · ${erros} com erro` : "") +
+    (itens.length - ok - erros ? ` · ${itens.length - ok - erros} pendente(s) de configuração` : "");
+  resumo.style.color = erros ? "var(--err)" : ok === itens.length ? "var(--ok)" : "var(--warn)";
+  document.getElementById("rodape").textContent =
+    `Atualizado ${new Date().toLocaleTimeString("pt-BR")} · auto-refresh ${INTERVALO / 1000}s`;
+}
+
+montar("backend", BACKEND);
+montar("canais", CANAIS);
+atualizar();
+setInterval(atualizar, INTERVALO);
+</script>
+</body>
+</html>
