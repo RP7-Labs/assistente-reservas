@@ -2,7 +2,7 @@
 -- Tudo fica no schema "reservas", então pode conviver com outro projeto no mesmo banco.
 create schema if not exists reservas;
 
-create table reservas.leads (
+create table if not exists reservas.leads (
   id text primary key,
   criado_em timestamptz not null default now(),
   canal text not null,              -- web | whatsapp
@@ -15,13 +15,13 @@ create table reservas.leads (
   noites int not null
 );
 
-create table reservas.cliques (
+create table if not exists reservas.cliques (
   id bigserial primary key,
   lead_id text not null references reservas.leads(id),
   em timestamptz not null default now()
 );
 
-create table reservas.conversas (
+create table if not exists reservas.conversas (
   id text primary key,              -- "wa:<telefone>" ou id do navegador
   canal text not null,
   mensagens jsonb not null default '[]',
@@ -29,7 +29,7 @@ create table reservas.conversas (
 );
 
 -- Reservas confirmadas (importadas do relatório da Gasystem) para fechar a atribuição
-create table reservas.reservas (
+create table if not exists reservas.reservas (
   codigo_motor text primary key,
   lead_id text references reservas.leads(id),
   valor numeric(10,2),
@@ -46,3 +46,6 @@ alter table reservas.reservas enable row level security;
 grant usage on schema reservas to service_role;
 grant all on all tables in schema reservas to service_role;
 grant all on all sequences in schema reservas to service_role;
+
+-- Faz a Data API enxergar as tabelas novas na hora
+notify pgrst, 'reload schema';

@@ -14,3 +14,7 @@ alter table reservas.reservas add column if not exists atualizado_em timestamptz
 create index if not exists reservas_periodo on reservas.reservas (checkin, checkout);
 create index if not exists leads_criado on reservas.leads (criado_em desc);
 create index if not exists conversas_atualizado on reservas.conversas (atualizado_em desc);
+
+grant all on all tables in schema reservas to service_role;
+grant all on all sequences in schema reservas to service_role;
+notify pgrst, 'reload schema';
