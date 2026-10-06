@@ -40,3 +40,8 @@ test("pedido de atendente é encaminhado", () => {
   assert.equal(conversa("quero falar com um atendente").acao.tipo, "atendente");
   assert.equal(conversa("orçamento para um casamento").acao.tipo, "atendente");
 });
+
+test("intervalo com mês nas duas datas", () => {
+  assert.deepEqual(extrairDatas("de 10/11 a 12/11", HOJE).datas, ["2026-11-10", "2026-11-12"]);
+  assert.deepEqual(extrairDatas("de 30/12/2026 a 01/01/2027", HOJE).datas, ["2026-12-30", "2027-01-01"]);
+});

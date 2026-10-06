@@ -3,7 +3,10 @@
 const ATIVAS = new Set(["confirmada", "concluida"]);
 
 // Estado de cada link gerado pelo assistente, do envio até a estadia
-export function montarLocacoes(leads, cliques, reservas, hoje = new Date().toISOString().slice(0, 10)) {
+const EM_PROCESSO = ["link_enviado", "clicou", "aguardando_pagamento"];
+
+export function montarLocacoes(leads, cliques, reservas, hoje = new Date().toISOString().slice(0, 10), pagamentos = []) {
+  const pagPorLead = new Map(pagamentos.map((p) => [p.lead_id, p]));
   const clicados = new Map();
   for (const c of cliques) if (!clicados.has(c.lead_id) || c.em < clicados.get(c.lead_id)) clicados.set(c.lead_id, c.em);
   const porLead = new Map(reservas.filter((r) => r.lead_id).map((r) => [r.lead_id, r]));
@@ -13,6 +16,7 @@ export function montarLocacoes(leads, cliques, reservas, hoje = new Date().toISO
     let status;
     if (reserva) status = reserva.status;
     else if (l.checkin < hoje) status = "nao_convertido";
+    else if (pagPorLead.get(l.id)?.status === "pendente") status = "aguardando_pagamento";
     else if (clicados.has(l.id)) status = "clicou";
     else status = "link_enviado";
     return {
@@ -29,6 +33,7 @@ export function montarLocacoes(leads, cliques, reservas, hoje = new Date().toISO
       hospede: reserva?.hospede ?? null,
       valor: reserva?.valor != null ? Number(reserva.valor) : null,
       status,
+      pagamento: resumoPagamento(pagPorLead.get(l.id)),
     };
   });
 
@@ -50,6 +55,11 @@ export function montarLocacoes(leads, cliques, reservas, hoje = new Date().toISO
   }));
 
   return [...doAssistente, ...manuais].sort((a, b) => String(b.criado_em).localeCompare(String(a.criado_em)));
+}
+
+function resumoPagamento(p) {
+  if (!p) return null;
+  return { status: p.status, metodo: p.metodo, nome: p.nome, email: p.email, valor: p.valor != null ? Number(p.valor) : null, cartao: p.cartao_final ? `${p.cartao_bandeira} •••• ${p.cartao_final}` : null, iniciado_em: p.iniciado_em, lembrete_em: p.lembrete_em ?? null, pago_em: p.pago_em ?? null };
 }
 
 // Ocupação por tipo de quarto numa data, com base nas reservas registradas aqui
@@ -118,7 +128,7 @@ export function indicadores(atendimentos, locacoes) {
     aguardando_atendente: atendimentos.filter((a) => a.precisa_atendente).length,
     links_gerados: links.length,
     links_clicados: links.filter((l) => l.clicou_em).length,
-    em_processo: locacoes.filter((l) => ["link_enviado", "clicou"].includes(l.status)).length,
+    em_processo: locacoes.filter((l) => EM_PROCESSO.includes(l.status)).length,
     reservas_confirmadas: confirmadas.length,
     reservas_do_assistente: doAssistente.length,
     conversao: links.length ? +(doAssistente.length / links.length).toFixed(3) : 0,

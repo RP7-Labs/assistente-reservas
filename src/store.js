@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [] };
   }
 }
 function gravarArquivo(db) {
@@ -222,4 +222,54 @@ export async function atualizarAdmin(id, campos) {
   const a = db.admins.find((x) => x.id === id);
   if (a) Object.assign(a, campos);
   gravarArquivo(db);
+}
+
+// ---- Pagamentos (checkout simulado) e e-mails enviados ----
+
+export async function buscarPagamento(leadId) {
+  if (sb) return verificar(await sb.from("pagamentos").select("*").eq("lead_id", leadId).maybeSingle());
+  return lerArquivo().pagamentos.find((p) => p.lead_id === leadId) ?? null;
+}
+
+// Grava ou atualiza o pagamento do lead (um por link de reserva)
+export async function salvarPagamento(dados) {
+  const linha = { ...dados, atualizado_em: new Date().toISOString() };
+  if (sb) return verificar(await sb.from("pagamentos").upsert(linha).select().single());
+  const db = lerArquivo();
+  const i = db.pagamentos.findIndex((p) => p.lead_id === linha.lead_id);
+  if (i >= 0) db.pagamentos[i] = { ...db.pagamentos[i], ...linha };
+  else db.pagamentos.push(linha);
+  gravarArquivo(db);
+  return db.pagamentos[i >= 0 ? i : db.pagamentos.length - 1];
+}
+
+export async function listarPagamentos() {
+  if (sb) return verificar(await sb.from("pagamentos").select("*").order("iniciado_em", { ascending: false }).limit(500));
+  return [...lerArquivo().pagamentos].sort((a, b) => String(b.iniciado_em).localeCompare(String(a.iniciado_em)));
+}
+
+// Pagamentos pendentes há mais de `minutos` que ainda não receberam lembrete
+export async function pagamentosSemLembrete(minutos, agora = new Date()) {
+  const limite = new Date(agora.getTime() - minutos * 60_000).toISOString();
+  if (sb) {
+    return verificar(await sb.from("pagamentos").select("*").eq("status", "pendente").is("lembrete_em", null).not("email", "is", null).lte("iniciado_em", limite).limit(50));
+  }
+  return lerArquivo().pagamentos.filter((p) => p.status === "pendente" && !p.lembrete_em && p.email && p.iniciado_em <= limite);
+}
+
+export async function registrarEmail(email) {
+  const linha = { criado_em: new Date().toISOString(), ...email };
+  if (sb) {
+    verificar(await sb.from("emails").insert(linha));
+    return linha;
+  }
+  const db = lerArquivo();
+  db.emails.push({ id: db.emails.length + 1, ...linha });
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function listarEmails(limite = 100) {
+  if (sb) return verificar(await sb.from("emails").select("*").order("criado_em", { ascending: false }).limit(limite));
+  return [...lerArquivo().emails].reverse().slice(0, limite);
 }

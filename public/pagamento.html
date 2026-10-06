@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pagamento da reserva</title>
+<style>
+  :root { --bg:#f5f5f4; --card:#fff; --tx:#1c1917; --mut:#78716c; --pri:#0f766e; --borda:#e7e5e4; --err:#b91c1c; --ok:#15803d; --aviso:#fef3c7; }
+  * { box-sizing:border-box } body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--tx) }
+  main { max-width:520px; margin:0 auto; padding:16px }
+  h1 { font-size:19px; margin:4px 0 12px } h2 { font-size:15px; margin:0 0 10px }
+  .card { background:var(--card); border:1px solid var(--borda); border-radius:14px; padding:16px; margin-bottom:12px }
+  .teste { background:var(--aviso); color:#78350f; border-radius:10px; padding:8px 12px; font-size:13px; margin-bottom:12px }
+  .linha { display:flex; justify-content:space-between; gap:12px; padding:3px 0 } .mut { color:var(--mut) }
+  .total { font-size:18px; font-weight:600; border-top:1px solid var(--borda); margin-top:8px; padding-top:8px }
+  label { display:block; font-size:13px; color:var(--mut); margin-bottom:10px }
+  input { display:block; width:100%; margin-top:4px; padding:10px 12px; border:1px solid #d6d3d1; border-radius:10px; font:inherit; color:var(--tx); background:#fff }
+  .dupla { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+  button { width:100%; padding:12px 16px; border:0; border-radius:10px; background:var(--pri); color:#fff; font:inherit; font-weight:600; cursor:pointer }
+  button.sec { background:#fff; color:var(--tx); border:1px solid #d6d3d1; font-weight:500 } button:disabled { opacity:.6; cursor:default }
+  .metodos { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px }
+  .metodos button { background:#fff; color:var(--tx); border:1px solid #d6d3d1; font-weight:500 }
+  .metodos button.ativo { border:2px solid var(--pri); color:var(--pri); font-weight:600 }
+  .erro { color:var(--err); font-size:14px; min-height:1em; margin:6px 0 }
+  .dica { font-size:13px; color:var(--mut); margin:8px 0 0 }
+  #qr { display:flex; justify-content:center; margin:8px 0 12px } #qr img, #qr canvas { width:200px; height:200px }
+  textarea { width:100%; font:12px/1.4 ui-monospace,monospace; padding:8px; border:1px solid #d6d3d1; border-radius:10px; resize:none; color:var(--tx) }
+  .ok { text-align:center } .ok .icone { font-size:40px; color:var(--ok) } code { font-size:16px; font-weight:600 }
+  [hidden] { display:none !important }
+</style>
+</head>
+<body>
+<main>
+  <div class="teste">Ambiente de testes: nenhum valor é cobrado de verdade.</div>
+  <h1 id="titulo">Finalize sua reserva</h1>
+  <div class="erro" id="erroGeral"></div>
+
+  <div class="card" id="resumo" hidden></div>
+
+  <form class="card" id="passoDados" hidden>
+    <h2>1. Seus dados</h2>
+    <label>Nome completo <input name="nome" autocomplete="name" required></label>
+    <label>E-mail <input name="email" type="email" autocomplete="email" required></label>
+    <label>Celular (opcional) <input name="telefone" type="tel" autocomplete="tel"></label>
+    <div class="erro" id="erroDados"></div>
+    <button>Continuar para o pagamento</button>
+    <p class="dica">Se você não concluir o pagamento em 5 minutos, enviamos o link por e-mail para terminar depois.</p>
+  </form>
+
+  <div class="card" id="passoPagar" hidden>
+    <h2>2. Forma de pagamento</h2>
+    <div class="metodos">
+      <button type="button" data-metodo="cartao" class="ativo">Cartão de crédito</button>
+      <button type="button" data-metodo="pix">Pix</button>
+    </div>
+
+    <form id="formCartao">
+      <label>Número do cartão <input name="numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000" required></label>
+      <label>Nome impresso no cartão <input name="nome" autocomplete="cc-name" required></label>
+      <div class="dupla">
+        <label>Validade <input name="validade" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/AA" required></label>
+        <label>CVV <input name="cvv" inputmode="numeric" autocomplete="cc-csc" maxlength="4" required></label>
+      </div>
+      <div class="erro" id="erroCartao"></div>
+      <button id="btnCartao">Pré-autorizar</button>
+      <p class="dica">O valor fica reservado no limite do cartão e só é cobrado pelo hotel. Se a reserva for cancelada, o limite é liberado.</p>
+      <p class="dica">Teste: 4111 1111 1111 1111 aprova; 4000 0000 0000 0002 é recusado. Qualquer validade futura e CVV.</p>
+    </form>
+
+    <div id="areaPix" hidden>
+      <div id="pixInicio">
+        <p class="mut" style="margin-top:0">Pague com Pix e a reserva é confirmada na hora.</p>
+        <div class="erro" id="erroPix"></div>
+        <button type="button" id="btnGerarPix">Gerar Pix</button>
+      </div>
+      <div id="pixGerado" hidden>
+        <div id="qr"></div>
+        <label>Pix copia e cola <textarea id="pixCodigo" rows="4" readonly></textarea></label>
+        <button type="button" class="sec" id="btnCopiar">Copiar código</button>
+        <p class="dica">Modo de teste: não pague este código. Use o botão abaixo para simular o pagamento recebido.</p>
+        <div class="erro" id="erroPix2"></div>
+        <button type="button" id="btnSimularPix">Simular pagamento recebido</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card ok" id="sucesso" hidden>
+    <div class="icone">✓</div>
+    <h2>Reserva confirmada</h2>
+    <p>Código da reserva: <code id="codigo"></code></p>
+    <p class="mut" id="sucessoDetalhe"></p>
+  </div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const lead = new URLSearchParams(location.search).get("lead");
+const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const br = (d) => d.split("-").reverse().join("/");
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let pedido;
+
+async function api(caminho, corpo) {
+  const r = await fetch(`/api/pagamento/${encodeURIComponent(lead)}${caminho}`, corpo ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`);
+  return j;
+}
+
+function mostrarResumo(p) {
+  const pessoas = `${p.adultos} adulto${p.adultos > 1 ? "s" : ""}${p.criancas ? `, ${p.criancas} criança${p.criancas > 1 ? "s" : ""}` : ""}`;
+  $("#resumo").innerHTML = `<h2>${esc(p.quarto)} · ${esc(p.hotel)}</h2>
+    <div class="linha"><span class="mut">Entrada</span><span>${br(p.checkin)}</span></div>
+    <div class="linha"><span class="mut">Saída</span><span>${br(p.checkout)}</span></div>
+    <div class="linha"><span class="mut">Hóspedes</span><span>${pessoas}</span></div>
+    <div class="linha"><span class="mut">${p.noites} noite${p.noites > 1 ? "s" : ""} × ${brl(p.diaria)}</span><span>${brl(p.total)}</span></div>
+    <div class="linha total"><span>Total</span><span>${brl(p.total)}</span></div>`;
+  $("#resumo").hidden = false;
+  $("#btnCartao").textContent = `Pré-autorizar ${brl(p.total)}`;
+}
+
+function mostrarSucesso(codigo, detalhe) {
+  ["#passoDados", "#passoPagar"].forEach((s) => ($(s).hidden = true));
+  $("#titulo").textContent = "Tudo certo!";
+  $("#codigo").textContent = codigo;
+  $("#sucessoDetalhe").textContent = detalhe;
+  $("#sucesso").hidden = false;
+}
+
+const detalheDe = (pg) => pg.metodo === "pix" ? "Pagamento por Pix recebido. Enviamos a confirmação para o seu e-mail."
+  : `Valor pré-autorizado no cartão ${pg.cartao_bandeira || ""} final ${pg.cartao_final || ""}. Enviamos a confirmação para o seu e-mail.`;
+
+async function iniciar() {
+  if (!lead) { $("#erroGeral").textContent = "Link inválido. Peça um novo link no chat."; return; }
+  try {
+    const d = await api("");
+    pedido = d.pedido;
+    mostrarResumo(pedido);
+    const pg = d.pagamento;
+    if (pg && ["pre_autorizado", "capturado", "pago"].includes(pg.status)) return mostrarSucesso(pg.codigo_reserva, detalheDe(pg));
+    if (pg?.status === "liberado") { $("#erroGeral").textContent = "Esta reserva foi cancelada. Fale com o hotel pelo chat."; return; }
+    if (d.expirado) { $("#erroGeral").textContent = "As datas deste link já passaram. Peça um novo link no chat."; return; }
+    const f = $("#passoDados");
+    if (pg?.email) { f.nome.value = pg.nome || ""; f.email.value = pg.email; }
+    f.hidden = false;
+    if (pg?.email) $("#passoPagar").hidden = false;
+  } catch (err) { $("#erroGeral").textContent = err.message; }
+}
+
+$("#passoDados").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const dados = Object.fromEntries(new FormData(e.target));
+  $("#erroDados").textContent = "";
+  try {
+    await api("/dados", dados);
+    $("#passoPagar").hidden = false;
+    if (!$("#formCartao").nome.value) $("#formCartao").nome.value = dados.nome.toUpperCase();
+    $("#passoPagar").scrollIntoView({ behavior: "smooth" });
+  } catch (err) { $("#erroDados").textContent = err.message; }
+});
+
+document.querySelectorAll("[data-metodo]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-metodo]").forEach((x) => x.classList.toggle("ativo", x === b));
+  $("#formCartao").hidden = b.dataset.metodo !== "cartao";
+  $("#areaPix").hidden = b.dataset.metodo !== "pix";
+}));
+
+// Máscaras simples
+$("#formCartao").numero.addEventListener("input", (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 19).replace(/(\d{4})(?=\d)/g, "$1 "); });
+$("#formCartao").validade.addEventListener("input", (e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 4); e.target.value = v.length > 2 ? v.slice(0, 2) + "/" + v.slice(2) : v; });
+
+$("#formCartao").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const b = $("#btnCartao"); b.disabled = true; $("#erroCartao").textContent = "";
+  try {
+    const r = await api("/cartao", Object.fromEntries(new FormData(e.target)));
+    const f = e.target.numero.value.replace(/\D/g, "").slice(-4);
+    mostrarSucesso(r.codigo_reserva, `Valor de ${brl(pedido.total)} pré-autorizado no cartão final ${f}. Enviamos a confirmação para o seu e-mail.`);
+  } catch (err) { $("#erroCartao").textContent = err.message; }
+  b.disabled = false;
+});
+
+$("#btnGerarPix").addEventListener("click", async () => {
+  $("#erroPix").textContent = "";
+  try {
+    const r = await api("/pix", {});
+    $("#pixCodigo").value = r.copia_e_cola;
+    $("#qr").innerHTML = "";
+    $("#qr").hidden = !window.QRCode;
+    if (window.QRCode) new QRCode($("#qr"), { text: r.copia_e_cola, width: 200, height: 200 });
+    $("#pixInicio").hidden = true; $("#pixGerado").hidden = false;
+  } catch (err) { $("#erroPix").textContent = err.message; }
+});
+$("#btnCopiar").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#pixCodigo").value); $("#btnCopiar").textContent = "Código copiado"; }
+  catch { $("#pixCodigo").select(); }
+});
+$("#btnSimularPix").addEventListener("click", async () => {
+  const b = $("#btnSimularPix"); b.disabled = true; $("#erroPix2").textContent = "";
+  try {
+    const r = await api("/pix/simular", {});
+    mostrarSucesso(r.codigo_reserva, `Pagamento de ${brl(pedido.total)} por Pix recebido. Enviamos a confirmação para o seu e-mail.`);
+  } catch (err) { $("#erroPix2").textContent = err.message; }
+  b.disabled = false;
+});
+
+iniciar();
+</script>
+</body>
+</html>

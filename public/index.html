@@ -12,7 +12,9 @@
   .eu { align-self:flex-end; background:var(--me); color:#fff } .bot { align-self:flex-start; background:var(--bot) }
   .ev { align-self:center; font-size:12px; color:var(--mut) } a { color:inherit }
   form { display:flex; gap:8px } input { flex:1; padding:10px 12px; border:1px solid #d6d3d1; border-radius:10px; font:inherit }
-  button { padding:10px 16px; border:0; border-radius:10px; background:var(--me); color:#fff; font:inherit }
+  button { padding:10px 16px; border:0; border-radius:10px; background:var(--me); color:#fff; font:inherit; cursor:pointer }
+  .opcoes { align-self:flex-start; display:flex; flex-wrap:wrap; gap:6px; max-width:85% }
+  .opcoes button { background:#fff; color:var(--me); border:1px solid var(--me); padding:6px 12px; border-radius:999px; font-size:14px }
 </style>
 </head>
 <body>
@@ -30,16 +32,31 @@ function add(cls, txt) {
                    .replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   log.appendChild(d); log.scrollTop = log.scrollHeight;
 }
-document.getElementById("f").onsubmit = async (e) => {
+// Botões de datas sugeridas (feriados, fim de semana)
+function addOpcoes(opcoes) {
+  const d = document.createElement("div"); d.className = "opcoes";
+  for (const o of opcoes) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = o.rotulo;
+    b.onclick = () => { d.remove(); enviar(o.texto, o.rotulo); };
+    d.appendChild(b);
+  }
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+}
+document.getElementById("f").onsubmit = (e) => {
   e.preventDefault(); const texto = t.value.trim(); if (!texto) return;
-  add("eu", texto); t.value = "";
+  t.value = ""; enviar(texto, texto);
+};
+async function enviar(texto, mostrar) {
+  document.querySelectorAll(".opcoes").forEach((x) => x.remove());
+  add("eu", mostrar);
   try {
     const r = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ conversaId:id, texto }) });
     const j = await r.json();
     add("bot", j.resposta || j.erro || "Erro");
     for (const ev of j.eventos || []) add("ev", ev.tipo === "link" ? `link gerado: ${ev.quarto}` : `encaminhado ao atendente: ${ev.motivo}`);
+    if (j.opcoes?.length) addOpcoes(j.opcoes);
   } catch { add("bot", "Falha de conexão."); }
-};
+}
 </script>
 </body>
 </html>

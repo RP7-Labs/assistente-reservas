@@ -45,3 +45,21 @@ Edite `data/hotel.json`: quartos reais, capacidades, preços "a partir de" e `mo
 ## Modo sem IA (regras)
 
 Sem `ANTHROPIC_API_KEY`, o chat funciona por regras (`src/regras.js`), sem custo: entende quarto (nome e apelidos do `data/hotel.json`), datas ("10/10", "dia 12", "de 3 a 5 de janeiro", "amanhã", "sexta"), noites e pessoas ("casal", "2 adultos e 1 criança"), pergunta só o que falta e gera o mesmo link rastreável. Pedidos de atendente, eventos, grupos e reclamações vão para o back-office. Responde ainda preço, quartos e políticas. Com a chave, passa a usar o Claude; `ASSISTENTE_MODO=regras` força o modo sem IA.
+
+## Datas por feriado
+
+No modo por regras, citar um feriado ou período ("natal", "réveillon", "carnaval", "semana santa", "corpus christi", "tiradentes", "finados", "fim de semana"...) faz o assistente sugerir 2 ou 3 opções de entrada e saída. No chat web elas viram botões; no WhatsApp, o hóspede responde com o número. Carnaval, Páscoa e Corpus Christi são calculados a partir da data da Páscoa; feriados fixos emendam com o fim de semana (`src/periodos.js`).
+
+## Checkout de pagamento (simulado)
+
+O link do chat (`/r/:id`) leva para `/pagamento`, onde o hóspede confirma os dados e paga:
+
+- **Cartão de crédito**: pré-autorização do valor total. No back-office (aba Pagamentos) o hotel **captura** (cobra) ou **libera** (cancela a reserva). Cartão de teste aprovado: 4111 1111 1111 1111; recusado: 4000 0000 0000 0002. O número do cartão nunca é gravado, só os 4 últimos dígitos.
+- **Pix**: gera um código copia e cola de teste e um botão "Simular pagamento recebido".
+
+Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda e-mail de confirmação. `CHECKOUT_MODO=motor` volta a mandar o link para o motor de reservas.
+
+**Lembrete por e-mail:** quem preenche os dados e não paga em 5 minutos recebe o link de pagamento por e-mail (uma vez).
+
+- Sem `RESEND_API_KEY` e `EMAIL_FROM`, os e-mails ficam só registrados no back-office (simulado).
+- Para agendar na Vercel: defina `CRON_SECRET`, rode `db/004_pagamentos.sql` e depois `db/005_cron_lembretes.sql` (pg_cron do Supabase chama `/api/tarefas/lembretes` a cada minuto). Localmente, o `npm start` já roda os lembretes sozinho.

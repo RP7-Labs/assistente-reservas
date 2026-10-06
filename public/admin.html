@@ -78,6 +78,7 @@
     <button data-aba="geral" class="ativo">Visão geral</button>
     <button data-aba="atendimentos">Atendimentos <span class="badge" id="badgeAtend" hidden></span></button>
     <button data-aba="locacoes">Locações</button>
+    <button data-aba="pagamentos">Pagamentos</button>
     <button data-aba="quartos">Quartos</button>
     <button data-aba="usuarios">Usuários <span class="badge" id="badgeUsu" hidden></span></button>
   </nav>
@@ -114,6 +115,16 @@
       <tbody id="tbLoc"></tbody>
     </table></div>
     <p class="aviso">Os links vêm do assistente. Quando a reserva for confirmada na Gasystem, use "Confirmar" para registrar o código e o valor. É isso que mede a conversão e a comissão economizada.</p>
+  </section>
+
+  <section data-sec="pagamentos" hidden>
+    <div class="tabela"><table>
+      <thead><tr><th>Status</th><th>Hóspede</th><th>Forma</th><th>Valor</th><th>Início</th><th>Lembrete</th><th>Reserva</th><th></th></tr></thead>
+      <tbody id="tbPag"></tbody>
+    </table></div>
+    <p class="aviso">Checkout simulado: nada é cobrado. Cartão fica pré-autorizado até você capturar (cobrar) ou liberar (cancela a reserva). Quem preenche os dados e não paga em 5 minutos recebe o link por e-mail.</p>
+    <h2>E-mails enviados <span class="mut" id="modoEmail"></span></h2>
+    <div class="lista" id="listaEmails"></div>
   </section>
 
   <section data-sec="quartos" hidden>
@@ -171,10 +182,16 @@ const quando = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-di
 const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 const STATUS = {
-  link_enviado: ["Link enviado", "t-info"], clicou: ["Clicou no link", "t-warn"],
+  link_enviado: ["Link enviado", "t-info"], clicou: ["Clicou no link", "t-warn"], aguardando_pagamento: ["Aguardando pagamento", "t-warn"],
   confirmada: ["Confirmada", "t-ok"], concluida: ["Concluída", "t-ok"],
   cancelada: ["Cancelada", "t-err"], no_show: ["No-show", "t-err"], nao_convertido: ["Não convertido", ""],
 };
+const EM_PROCESSO = ["link_enviado", "clicou", "aguardando_pagamento"];
+const PAG = {
+  pendente: ["Pendente", "t-warn"], pre_autorizado: ["Pré-autorizado", "t-info"], capturado: ["Capturado", "t-ok"],
+  pago: ["Pago", "t-ok"], liberado: ["Liberado", "t-err"],
+};
+const tagPag = (s) => { const [t, c] = PAG[s] ?? [s, ""]; return `<span class="tag ${c}">${esc(t)}</span>`; };
 const tagStatus = (s) => { const [t, c] = STATUS[s] ?? [s, ""]; return `<span class="tag ${c}">${esc(t)}</span>`; };
 
 let token = "";
@@ -244,7 +261,7 @@ async function carregar() {
   nomes = Object.fromEntries(painel.quartos.map((q) => [q.id, q.nome]));
   $("#atualizado").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR");
   desenharGeral(); desenharAtend(); desenharLoc();
-  await Promise.all([carregarQuartos(), carregarUsuarios()]);
+  await Promise.all([carregarQuartos(), carregarUsuarios(), carregarPagamentos()]);
 }
 
 async function carregarUsuarios() {
@@ -280,7 +297,7 @@ function desenharGeral() {
 
   const aguard = painel.atendimentos.filter((a) => a.precisa_atendente);
   $("#geralAtend").innerHTML = aguard.length ? aguard.map(itemAtend).join("") : `<div class="vazio">Nenhum atendimento aguardando.</div>`;
-  const proc = painel.locacoes.filter((l) => ["link_enviado", "clicou"].includes(l.status)).slice(0, 8);
+  const proc = painel.locacoes.filter((l) => EM_PROCESSO.includes(l.status)).slice(0, 8);
   $("#geralProc").innerHTML = proc.length ? proc.map((l) =>
     `<div class="item">${tagStatus(l.status)}<div class="grow"><strong>${esc(nomes[l.quarto_id] || l.quarto_id)}</strong> · ${dataBR(l.checkin)} a ${dataBR(l.checkout)} <span class="mut">· ${esc(l.hospedes || "")} · ${esc(l.origem)}</span></div>
      <button class="btn" data-confirmar="${esc(l.lead_id)}">Confirmar</button></div>`).join("") : `<div class="vazio">Nada em processo.</div>`;
@@ -307,20 +324,38 @@ function desenharAtend() {
 function desenharLoc() {
   const f = $("#fLoc").value;
   const filtro = {
-    "": () => true, processo: (l) => ["link_enviado", "clicou"].includes(l.status),
+    "": () => true, processo: (l) => EM_PROCESSO.includes(l.status),
     cancelada: (l) => ["cancelada", "no_show"].includes(l.status),
   }[f] ?? ((l) => l.status === f);
   const l = painel.locacoes.filter(filtro);
   $("#tbLoc").innerHTML = l.length ? l.map((x) => {
     let acoes = "";
-    if (["link_enviado", "clicou", "nao_convertido"].includes(x.status)) acoes = `<button class="btn" data-confirmar="${esc(x.lead_id)}">Confirmar</button>`;
+    if ([...EM_PROCESSO, "nao_convertido"].includes(x.status)) acoes = `<button class="btn" data-confirmar="${esc(x.lead_id)}">Confirmar</button>`;
     else if (x.codigo_motor) acoes = `<select data-status="${esc(x.codigo_motor)}">${["confirmada", "concluida", "cancelada", "no_show"].map((s) =>
       `<option value="${s}" ${s === x.status ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}</select>`;
     const origem = x.lead_id ? `${esc(x.origem)}${x.conversa_id ? ` · <a href="#" data-conversa="${esc(x.conversa_id)}" style="color:var(--info)">conversa</a>` : ""}` : "manual";
     return `<tr><td>${tagStatus(x.status)}</td><td>${esc(nomes[x.quarto_id] || x.quarto_id)}</td>
       <td>${dataBR(x.checkin)} a ${dataBR(x.checkout)}<div class="mut">${esc(x.hospedes || "")}</div></td>
-      <td>${origem}<div class="mono">${esc(x.codigo_motor || "")}</div></td><td>${esc(x.hospede || "—")}</td><td>${brl(x.valor)}</td><td>${acoes}</td></tr>`;
+      <td>${origem}<div class="mono">${esc(x.codigo_motor || "")}</div></td><td>${esc(x.hospede || x.pagamento?.nome || "—")}${x.pagamento ? `<div>${tagPag(x.pagamento.status)}</div>` : ""}</td><td>${brl(x.valor ?? x.pagamento?.valor)}</td><td>${acoes}</td></tr>`;
   }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhuma locação.</td></tr>`;
+}
+
+async function carregarPagamentos() {
+  const r = await api("/pagamentos");
+  $("#tbPag").innerHTML = r.pagamentos.length ? r.pagamentos.map((p) => {
+    const forma = p.metodo === "cartao" ? `Cartão${p.cartao_final ? ` ${esc(p.cartao_bandeira)} •••• ${esc(p.cartao_final)}` : ""}` : p.metodo === "pix" ? "Pix" : "—";
+    const acoes = p.status === "pre_autorizado"
+      ? `<button class="btn prim" data-pag="${esc(p.lead_id)}" data-pagacao="capturar">Capturar</button> <button class="btn" data-pag="${esc(p.lead_id)}" data-pagacao="liberar">Liberar</button>` : "";
+    return `<tr><td>${tagPag(p.status)}</td><td>${esc(p.nome || "—")}<div class="mut">${esc(p.email || "")}</div></td><td>${forma}</td><td>${brl(p.valor)}</td>
+      <td class="mut">${quando(p.iniciado_em)}</td><td class="mut">${p.lembrete_em ? quando(p.lembrete_em) : "—"}</td>
+      <td class="mono">${esc(p.codigo_reserva || "")}</td><td style="white-space:nowrap">${acoes}</td></tr>`;
+  }).join("") : `<tr><td colspan="8" class="mut" style="text-align:center">Nenhum pagamento ainda.</td></tr>`;
+  $("#modoEmail").textContent = r.modo_email === "resend" ? "· enviados pela Resend" : "· modo simulado: ninguém recebe, ficam só aqui";
+  $("#listaEmails").innerHTML = r.emails.length ? r.emails.map((m) =>
+    `<details class="item" style="display:block"><summary><span class="tag">${esc(m.tipo === "lembrete_pagamento" ? "Lembrete" : m.tipo === "confirmacao" ? "Confirmação" : m.tipo || "e-mail")}</span>
+      <strong>${esc(m.para)}</strong> · ${esc(m.assunto)} <span class="mut">· ${quando(m.criado_em)}</span>${m.erro ? ` <span class="tag t-err">falhou</span>` : ""}</summary>
+      <div class="fala" style="white-space:pre-wrap;margin-top:8px">${esc(m.corpo)}</div>${m.erro ? `<div class="erro">${esc(m.erro)}</div>` : ""}</details>`).join("")
+    : `<div class="vazio">Nenhum e-mail enviado.</div>`;
 }
 
 async function carregarQuartos() {
@@ -370,9 +405,14 @@ $("#formReserva").addEventListener("submit", async (e) => {
 });
 
 document.addEventListener("click", async (e) => {
-  const t = e.target.closest("[data-aba],[data-conversa],[data-confirmar],[data-resolver],[data-fechar],[data-usuario],[data-modo]");
+  const t = e.target.closest("[data-aba],[data-conversa],[data-confirmar],[data-resolver],[data-fechar],[data-usuario],[data-modo],[data-pag]");
   if (!t) return;
   if (t.dataset.modo) trocarModo(t.dataset.modo);
+  else if (t.dataset.pag) {
+    if (t.dataset.pagacao === "liberar" && !confirm("Liberar a pré-autorização? A reserva será cancelada.")) return;
+    try { await api(`/pagamentos/${encodeURIComponent(t.dataset.pag)}/${t.dataset.pagacao}`, { method: "POST" }); await carregar(); }
+    catch (err) { alert(err.message); }
+  }
   else if (t.dataset.usuario) {
     if (t.dataset.acao === "revogar" && !confirm("Revogar o acesso deste admin?")) return;
     try { await api(`/usuarios/${t.dataset.usuario}/${t.dataset.acao}`, { method: "POST" }); await carregarUsuarios(); }

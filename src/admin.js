@@ -5,7 +5,9 @@ import { carregarHotel } from "./catalogo.js";
 import {
   listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
+  listarPagamentos, buscarPagamento, salvarPagamento, listarEmails,
 } from "./store.js";
+import { modoEmail } from "./email.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
@@ -101,9 +103,9 @@ admin.post("/usuarios/:id/:acao", rota(async (req, res) => {
 }));
 
 admin.get("/painel", rota(async (_req, res) => {
-  const [conversas, dados] = await Promise.all([listarConversas(), listarDados()]);
+  const [conversas, dados, pagamentos] = await Promise.all([listarConversas(), listarDados(), listarPagamentos()]);
   const atendimentos = conversas.map(resumoAtendimento);
-  const locacoes = montarLocacoes(dados.leads, dados.cliques, dados.reservas);
+  const locacoes = montarLocacoes(dados.leads, dados.cliques, dados.reservas, undefined, pagamentos);
   res.json({ indicadores: indicadores(atendimentos, locacoes), atendimentos, locacoes, quartos: carregarHotel().quartos.map(({ id, nome }) => ({ id, nome })) });
 }));
 
@@ -158,4 +160,22 @@ admin.patch("/reservas/:codigo", rota(async (req, res) => {
   if (!STATUS_RESERVA.includes(status)) return res.status(400).json({ erro: "Status inválido" });
   const ok = await atualizarStatusReserva(req.params.codigo, status);
   res.status(ok ? 200 : 404).json(ok ? { ok: true } : { erro: "Reserva não encontrada" });
+}));
+
+// Pagamentos do checkout simulado e e-mails enviados
+admin.get("/pagamentos", rota(async (_req, res) => {
+  const [pagamentos, emails] = await Promise.all([listarPagamentos(), listarEmails()]);
+  res.json({ pagamentos, emails, modo_email: modoEmail() });
+}));
+
+// Pré-autorização do cartão: capturar (cobra) ou liberar (devolve o limite e cancela a reserva)
+admin.post("/pagamentos/:lead/:acao", rota(async (req, res) => {
+  const { acao } = req.params;
+  if (!["capturar", "liberar"].includes(acao)) return res.status(400).json({ erro: "Ação inválida" });
+  const pag = await buscarPagamento(req.params.lead);
+  if (!pag) return res.status(404).json({ erro: "Pagamento não encontrado" });
+  if (pag.status !== "pre_autorizado") return res.status(409).json({ erro: "Só pré-autorizações podem ser capturadas ou liberadas" });
+  await salvarPagamento({ ...pag, status: acao === "capturar" ? "capturado" : "liberado" });
+  if (acao === "liberar" && pag.codigo_reserva) await atualizarStatusReserva(pag.codigo_reserva, "cancelada");
+  res.json({ ok: true });
 }));

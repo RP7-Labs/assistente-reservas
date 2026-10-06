@@ -4,6 +4,8 @@ import { carregarHotel, montarLinkMotor } from "./catalogo.js";
 import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
 import { admin } from "./admin.js";
+import { pagamento, rotaLembretes } from "./pagamento.js";
+import { modoEmail } from "./email.js";
 
 export const app = express();
 app.use(express.json());
@@ -34,6 +36,10 @@ app.get("/api/health", async (_req, res) => {
       ? { nome: "ia", estado: "pendente", detalhe: "modo sem IA (regras) ativo; o chat funciona" }
       : config("ia", "ANTHROPIC_API_KEY"),
     config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
+    { nome: "pagamento", estado: "pendente", detalhe: "checkout simulado (cartão pré-autorizado e Pix de teste)" },
+    modoEmail() === "resend"
+      ? { nome: "email", estado: "ok", detalhe: "envio pela Resend" }
+      : { nome: "email", estado: "pendente", detalhe: "simulado: e-mails ficam no back-office (falta RESEND_API_KEY, EMAIL_FROM)" },
     config("rastreio", "PUBLIC_URL"),
   ];
   res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
@@ -57,6 +63,8 @@ app.get("/r/:id", async (req, res) => {
     if (!lead) return res.status(404).send("Link não encontrado");
     await registrarClique(lead.id);
     const hotel = carregarHotel();
+    // Por padrão vai para o checkout próprio (simulado). CHECKOUT_MODO=motor manda para o motor de reservas.
+    if (process.env.CHECKOUT_MODO !== "motor") return res.redirect(302, `/pagamento?lead=${encodeURIComponent(lead.id)}`);
     const quarto = hotel.quartos.find((q) => q.id === lead.quarto_id);
     res.redirect(302, montarLinkMotor(hotel, quarto, lead, lead.id));
   } catch (err) {
@@ -75,5 +83,8 @@ app.get("/api/metricas", async (_req, res) => {
 });
 
 app.use("/api/admin", admin);
+app.use("/api/pagamento", pagamento);
+// Lembretes de pagamento por e-mail; chamado a cada minuto pelo agendador (pg_cron do Supabase)
+app.all("/api/tarefas/lembretes", rotaLembretes);
 
 rotasWhatsapp(app);

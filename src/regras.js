@@ -1,6 +1,7 @@
 // Assistente sem IA: entende quarto, datas e pessoas por regras simples.
 // Funções puras: recebem o histórico de mensagens do hóspede e devolvem a resposta da última.
 import { validarPedido } from "./catalogo.js";
+import { sugerirPeriodo } from "./periodos.js";
 
 const MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
@@ -52,11 +53,11 @@ export function extrairDatas(t, hoje) {
   };
   const mesRe = MESES.join("|");
   // intervalos: "10 a 12/10", "de 10 a 12 de outubro"
-  marcar(new RegExp(`\\b(\\d{1,2})\\s*(?:a|ate|-)\\s*(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?`, "g"), (m) => {
+  marcar(new RegExp(`(?<![\\d/])\\b(\\d{1,2})\\s*(?:a|ate|-)\\s*(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?`, "g"), (m) => {
     const fim = comAno(+m[2], +m[3], m[4] && +m[4], hoje);
     return [fim && comAno(+m[1], +m[3], fim && +fim.slice(0, 4), hoje), fim];
   });
-  marcar(new RegExp(`\\b(\\d{1,2})\\s*(?:a|ate|-)\\s*(\\d{1,2})\\s+de\\s+(${mesRe})`, "g"), (m) => {
+  marcar(new RegExp(`(?<![\\d/])\\b(\\d{1,2})\\s*(?:a|ate|-)\\s*(\\d{1,2})\\s+de\\s+(${mesRe})`, "g"), (m) => {
     const mes = MESES.indexOf(m[3]) + 1;
     const fim = comAno(+m[2], mes, null, hoje);
     return [fim && comAno(+m[1], mes, +fim.slice(0, 4), hoje), fim];
@@ -111,9 +112,10 @@ const INTENCOES = {
   saudacao: /^(oi|ola|bom dia|boa tarde|boa noite|e ai|opa)\b/,
 };
 
-const vazio = () => ({ quarto: null, checkin: null, checkout: null, noites: null, adultos: null, criancas: null });
+const vazio = () => ({ quarto: null, checkin: null, checkout: null, noites: null, adultos: null, criancas: null, periodo: null });
 
 function faltando(e) {
+  if (e.periodo && !e.checkin) return "opcao";
   if (!e.quarto) return "quarto";
   if (!e.checkin) return "checkin";
   if (!e.checkout && !e.noites) return "checkout";
@@ -121,7 +123,16 @@ function faltando(e) {
   return null;
 }
 
-function pergunta(campo, hotel) {
+const noitesEntre = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+export const rotuloOpcao = (o) => `${br(o.checkin)} a ${br(o.checkout)} (${noitesEntre(o.checkin, o.checkout)} noite${noitesEntre(o.checkin, o.checkout) > 1 ? "s" : ""})`;
+const textoOpcao = (o) => `de ${o.checkin.split("-").reverse().join("/")} a ${o.checkout.split("-").reverse().join("/")}`;
+
+function pergunta(campo, hotel, estado) {
+  if (campo === "opcao") {
+    return `Para ${estado.periodo.nome}, sugiro estas datas:\n` +
+      estado.periodo.opcoes.map((o, i) => `${i + 1}) ${rotuloOpcao(o)}`).join("\n") +
+      "\nResponda com o número da opção ou me diga outras datas.";
+  }
   return {
     quarto: `Qual quarto você prefere? Temos: ${hotel.quartos.map((q) => `${q.nome} (a partir de ${reais(q.preco_a_partir)})`).join(", ")}.`,
     checkin: "Para qual data é a entrada?",
@@ -141,12 +152,20 @@ function aplicar(estado, texto, hotel, hoje) {
   if (INTENCOES.atendente.test(t)) return { estado: e, atendente: texto };
 
   const { datas, resto } = extrairDatas(t, hoje);
+  // Feriado citado: oferece datas para escolher (a data do próprio feriado não vira check-in)
+  const periodo = datas.length < 2 ? sugerirPeriodo(t, hoje) : null;
+  if (periodo) datas.length = 0;
   const pessoas = extrairPessoas(resto);
   const quarto = extrairQuarto(t, hotel);
   let m;
   const noites = (m = resto.match(new RegExp(`\\b${NUM}\\s+(?:noites?|diarias?|dias)\\b`))) ? valorNum(m[1]) : null;
 
   if (quarto) e.quarto = quarto;
+  if (periodo) {
+    e.periodo = periodo;
+    e.checkin = e.checkout = e.noites = null;
+  }
+  if (datas.length) e.periodo = null;
   if (datas.length >= 2) {
     [e.checkin, e.checkout] = datas;
     e.noites = null;
@@ -162,14 +181,18 @@ function aplicar(estado, texto, hotel, hoje) {
   if (pessoas.criancas != null) e.criancas = pessoas.criancas;
 
   // Resposta curta só com número, para a pergunta que estava aberta
-  const sozinho = resto.match(new RegExp(`^(?:sao |seremos |somos )?${NUM}\\s*\\.?$`));
+  const sozinho = resto.match(new RegExp(`^(?:sao |seremos |somos |opcao |a |o )?${NUM}\\s*\\.?$`));
   if (sozinho && !datas.length) {
     const n = valorNum(sozinho[1]);
-    if (pendente === "adultos") e.adultos = n;
+    const escolhida = pendente === "opcao" && e.periodo.opcoes[n - 1];
+    if (escolhida) {
+      ({ checkin: e.checkin, checkout: e.checkout } = escolhida);
+      e.periodo = null;
+    } else if (pendente === "adultos") e.adultos = n;
     else if (pendente === "checkout") e.noites = n;
   }
 
-  const entendeuAlgo = quarto || datas.length || noites || pessoas.adultos != null || pessoas.criancas != null || sozinho;
+  const entendeuAlgo = quarto || periodo || datas.length || noites || pessoas.adultos != null || pessoas.criancas != null || sozinho;
   if (INTENCOES.quartos.test(t) && !quarto) {
     info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${q.capacidade_total} pessoas. A partir de ${reais(q.preco_a_partir)} a diária.`).join("\n"));
   } else if (INTENCOES.preco.test(t)) {
@@ -214,15 +237,17 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
       } else {
         partes.push(v.erro);
         if (/comporta|quarto/i.test(v.erro)) estado.quarto = null;
-        else { estado.checkin = null; estado.checkout = null; estado.noites = null; }
+        else { estado.checkin = null; estado.checkout = null; estado.noites = null; estado.periodo = null; }
         falta = faltando(estado);
       }
     }
     if (falta) {
       if (!r.entendeuAlgo && !r.info.length && falta !== "quarto" && !partes.length) partes.push("Não entendi bem.");
-      partes.push(pergunta(falta, hotel));
+      partes.push(pergunta(falta, hotel, estado));
     }
-    if (ultima) saida = { texto: partes.join("\n\n"), acao };
+    // Botões de escolha para o chat web
+    const opcoes = falta === "opcao" ? estado.periodo.opcoes.map((o) => ({ rotulo: rotuloOpcao(o), texto: textoOpcao(o) })) : undefined;
+    if (ultima) saida = { texto: partes.join("\n\n"), acao, ...(opcoes ? { opcoes } : {}) };
   });
   return saida ?? { texto: pergunta("quarto", hotel), acao: null };
 }
