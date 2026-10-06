@@ -103,7 +103,9 @@ admin.post("/usuarios/:id/:acao", rota(async (req, res) => {
 }));
 
 admin.get("/painel", rota(async (_req, res) => {
-  const [conversas, dados, pagamentos] = await Promise.all([listarConversas(), listarDados(), listarPagamentos()]);
+  const [conversas, dados, pagamentos] = await Promise.all([listarConversas(), listarDados(),
+    // Antes de rodar db/004_pagamentos.sql a tabela não existe; o painel segue funcionando
+    listarPagamentos().catch(() => [])]);
   const atendimentos = conversas.map(resumoAtendimento);
   const locacoes = montarLocacoes(dados.leads, dados.cliques, dados.reservas, undefined, pagamentos);
   res.json({ indicadores: indicadores(atendimentos, locacoes), atendimentos, locacoes, quartos: carregarHotel().quartos.map(({ id, nome }) => ({ id, nome })) });
