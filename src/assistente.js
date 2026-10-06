@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
 import { criarLead, carregarConversa, salvarConversa, marcarAtendente } from "./store.js";
 import { responderPorRegras, hojeSP } from "./regras.js";
+import { configLLM, responderComLLM } from "./llm.js";
 
 const MODELO = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const MAX_RODADAS = 6;
@@ -81,8 +82,29 @@ async function executarFerramenta(nome, entrada, ctx) {
 }
 
 // Sem chave da IA (ou ASSISTENTE_MODO=regras), responde por regras, sem custo
-export const modoAssistente = () =>
-  process.env.ASSISTENTE_MODO === "regras" || !process.env.ANTHROPIC_API_KEY ? "regras" : "ia";
+// Modo do assistente: "ia" (Claude, pago), "gratis" (Gemini/Groq no plano gratuito) ou "regras" (sem IA).
+// ASSISTENTE_MODO força um deles; sem ele, usa o primeiro que tiver chave.
+export const modoAssistente = () => {
+  const forcado = process.env.ASSISTENTE_MODO;
+  if (forcado === "regras" || (forcado === "gratis" && configLLM()) || (forcado === "ia" && process.env.ANTHROPIC_API_KEY)) return forcado;
+  if (process.env.ANTHROPIC_API_KEY) return "ia";
+  if (configLLM()) return "gratis";
+  return "regras";
+};
+
+// IA gratuita; se falhar (limite do plano grátis, rede), responde por regras para o hóspede não ficar sem resposta
+async function responderGratis({ conversaId, texto, canal, publicUrl }) {
+  try {
+    const historico = await carregarConversa(conversaId);
+    const r = await responderComLLM({ historico, texto, canal, conversaId, publicUrl });
+    await salvarConversa(conversaId, canal, r.historico);
+    if (r.pedirAtendente) await marcarAtendente(conversaId, true, r.pedirAtendente);
+    return { resposta: r.resposta, eventos: r.eventos, opcoes: r.opcoes };
+  } catch (err) {
+    console.error("IA gratuita falhou, usando regras:", err.message);
+    return responderSemIA({ conversaId, texto, canal, publicUrl });
+  }
+}
 
 async function responderSemIA({ conversaId, texto, canal, publicUrl }) {
   const hotel = carregarHotel();
@@ -111,7 +133,9 @@ async function responderSemIA({ conversaId, texto, canal, publicUrl }) {
 }
 
 export async function responder({ conversaId, texto, canal = "web", publicUrl = process.env.PUBLIC_URL }) {
-  if (modoAssistente() === "regras") return responderSemIA({ conversaId, texto, canal, publicUrl });
+  const modo = modoAssistente();
+  if (modo === "regras") return responderSemIA({ conversaId, texto, canal, publicUrl });
+  if (modo === "gratis") return responderGratis({ conversaId, texto, canal, publicUrl });
   const hotel = carregarHotel();
   const historico = await carregarConversa(conversaId);
   historico.push({ role: "user", content: texto });

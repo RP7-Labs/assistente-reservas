@@ -32,9 +32,11 @@ app.get("/api/health", async (_req, res) => {
   };
   const servicos = [
     { nome: "banco", estado: banco.ok ? "ok" : "erro", detalhe: banco.detalhe, ms: banco.ms },
-    modoAssistente() === "regras"
-      ? { nome: "ia", estado: "pendente", detalhe: "modo sem IA (regras) ativo; o chat funciona" }
-      : config("ia", "ANTHROPIC_API_KEY"),
+    {
+      regras: { nome: "ia", estado: "pendente", detalhe: "modo sem IA (regras) ativo; o chat funciona" },
+      gratis: { nome: "ia", estado: "ok", detalhe: `IA gratuita (${process.env.LLM_PROVEDOR || "gemini"}); se falhar, responde por regras` },
+      ia: { nome: "ia", estado: "ok", detalhe: "Claude configurado" },
+    }[modoAssistente()],
     config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
     { nome: "pagamento", estado: "pendente", detalhe: "checkout simulado (cartão pré-autorizado e Pix de teste)" },
     modoEmail() === "resend"

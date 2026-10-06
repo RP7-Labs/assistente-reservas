@@ -71,3 +71,14 @@ As respostas sobre o hotel ficam em `data/conhecimento.md`, uma seção `##` por
 ## Botões no chat
 
 Cada passo da conversa vem com opções para tocar: menu inicial, quarto, data de entrada (hoje, amanhã, fim de semana ou calendário), noites, pessoas (respeitando a capacidade do quarto), datas de feriado e lista de dúvidas. No WhatsApp, até 3 opções viram botões e até 10 viram uma lista; datas são digitadas.
+
+## IA gratuita (Gemini ou Groq)
+
+Para uma conversa mais livre sem pagar, coloque na Vercel `LLM_API_KEY` (e `LLM_PROVEDOR=groq` se for Groq; o padrão é Gemini). A chave grátis sai em [aistudio.google.com](https://aistudio.google.com/apikey) (Gemini) ou [console.groq.com](https://console.groq.com/keys) (Groq).
+
+- Usa as mesmas ferramentas do modo Claude: o link só sai depois de validar quarto, datas e capacidade, e pedidos de atendente vão para o back-office.
+- As dúvidas usam a base `data/conhecimento.md` (a seção mais parecida vai junto da mensagem) e as datas de feriado são calculadas pelo servidor.
+- Os botões continuam: a IA termina a mensagem com `[opções: A | B]`, que o chat transforma em botões.
+- Se a IA falhar ou demorar (limite do plano grátis, rede), aquela mensagem é respondida pelas regras.
+- Prioridade: `ANTHROPIC_API_KEY` (Claude) > `LLM_API_KEY` (grátis) > regras. `ASSISTENTE_MODO=regras|gratis|ia` força um modo.
+- Atenção: no plano grátis do Gemini, o Google pode usar as conversas para melhorar os produtos dele. Use só para testes, sem dados reais de hóspedes.
