@@ -2,6 +2,7 @@
 // Funções puras: recebem o histórico de mensagens do hóspede e devolvem a resposta da última.
 import { validarPedido } from "./catalogo.js";
 import { sugerirPeriodo } from "./periodos.js";
+import { buscar, topicos, porTitulo } from "./conhecimento.js";
 
 const MESES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const SEMANA = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
@@ -105,16 +106,21 @@ function extrairQuarto(t, hotel) {
 
 const INTENCOES = {
   atendente: /\b(atendente|humano|pessoa de verdade|falar com (?:alguem|uma pessoa)|reclama\w*|evento|casamento|festa|grupo|empresa|corporativ\w*)\b/,
-  reiniciar: /\b(recomecar|reiniciar|comecar de novo|esquece)\b/,
-  quartos: /\b(quais|que|tipos? de|opcoes de)\s+quartos?\b|\bquartos (?:disponiveis|voces tem)\b|^quartos?\??$/,
+  reiniciar: /\b(recomecar|reiniciar|comecar de novo|esquece|nova reserva|outra reserva)\b/,
+  reservar: /\b(reserva(?:r)?|hospedar|hospedagem|disponibilidade|vaga|quero (?:um |o |a )?quarto)\b/,
+  quartos: /\b(quais|que|tipos? de|opcoes de|ver(?: os)?)\s+quartos?\b|\bquartos (?:disponiveis|voces tem|e precos)\b|^quartos?\??$/,
   preco: /\b(preco|precos|valor|valores|quanto custa|quanto fica|diaria|tarifa)\b/,
-  politicas: /\b(cafe|pet|pets|cachorro|gato|cancelamento|cancelar a reserva|check-?in|check-?out|horario|estacionamento)\b/,
+  duvidas: /^(duvidas?|tenho (?:uma )?duvida|outras duvidas|ver outras duvidas|perguntas frequentes|informacoes)\b/,
+  agradecer: /\b(obrigad[oa]|valeu|agradeco|brigad[oa])\b/,
+  despedida: /^(tchau|ate mais|ate logo|falou|flw)\b/,
   saudacao: /^(oi|ola|bom dia|boa tarde|boa noite|e ai|opa)\b/,
+  pergunta: /\?|^(tem|tens|aceita|aceitam|pode|posso|qual|quais|como|onde|quando|quanto|que horas|voces|vcs|existe|ha|da pra|e possivel)\b/,
 };
 
-const vazio = () => ({ quarto: null, checkin: null, checkout: null, noites: null, adultos: null, criancas: null, periodo: null });
+const vazio = () => ({ ativo: false, quarto: null, checkin: null, checkout: null, noites: null, adultos: null, criancas: null, periodo: null });
 
 function faltando(e) {
+  if (!e.ativo) return null;
   if (e.periodo && !e.checkin) return "opcao";
   if (!e.quarto) return "quarto";
   if (!e.checkin) return "checkin";
@@ -124,21 +130,53 @@ function faltando(e) {
 }
 
 const noitesEntre = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
-export const rotuloOpcao = (o) => `${br(o.checkin)} a ${br(o.checkout)} (${noitesEntre(o.checkin, o.checkout)} noite${noitesEntre(o.checkin, o.checkout) > 1 ? "s" : ""})`;
-const textoOpcao = (o) => `de ${o.checkin.split("-").reverse().join("/")} a ${o.checkout.split("-").reverse().join("/")}`;
+const plural = (n, s, p = s + "s") => `${n} ${n === 1 ? s : p}`;
+export const rotuloOpcao = (o) => `${br(o.checkin)} a ${br(o.checkout)} (${plural(noitesEntre(o.checkin, o.checkout), "noite")})`;
+const brAno = (d) => d.split("-").reverse().join("/");
+const textoOpcao = (o) => `de ${brAno(o.checkin)} a ${brAno(o.checkout)}`;
+const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const diaSemana = (d) => DIAS[new Date(d + "T12:00:00Z").getUTCDay()];
 
-function pergunta(campo, hotel, estado) {
-  if (campo === "opcao") {
-    return `Para ${estado.periodo.nome}, sugiro estas datas:\n` +
-      estado.periodo.opcoes.map((o, i) => `${i + 1}) ${rotuloOpcao(o)}`).join("\n") +
-      "\nResponda com o número da opção ou me diga outras datas.";
+// Varia o jeito de falar, de forma previsível (mesma conversa, mesma resposta)
+const variar = (lista, n) => lista[n % lista.length];
+
+// Botões que acompanham cada pergunta. tipo "data" abre um seletor de data no chat.
+const op = (rotulo, texto = rotulo, extra = {}) => ({ rotulo, texto, ...extra });
+const MENU = [op("Fazer uma reserva"), op("Ver quartos e preços"), op("Dúvidas sobre o hotel"), op("Falar com atendente")];
+
+function botoes(campo, hotel, estado, hoje) {
+  if (campo === "opcao") return estado.periodo.opcoes.map((o) => op(rotuloOpcao(o), textoOpcao(o)));
+  if (campo === "quarto") return hotel.quartos.map((q) => op(`${q.nome} · ${reais(q.preco_a_partir)}`, q.nome)).concat(op("Ver detalhes dos quartos"));
+  if (campo === "checkin") {
+    const fds = sugerirPeriodo("fim de semana", hoje);
+    return [
+      op("Hoje", brAno(hoje)), op("Amanhã", brAno(somarDias(hoje, 1))),
+      ...(fds ? [op("Este fim de semana", "fim de semana")] : []),
+      op("Escolher data", "", { tipo: "data", min: hoje }),
+    ];
   }
-  return {
-    quarto: `Qual quarto você prefere? Temos: ${hotel.quartos.map((q) => `${q.nome} (a partir de ${reais(q.preco_a_partir)})`).join(", ")}.`,
-    checkin: "Para qual data é a entrada?",
-    checkout: "E a saída? Pode me dizer a data ou quantas noites.",
-    adultos: "Quantas pessoas vão se hospedar? Se tiver criança, me diga quantas.",
-  }[campo];
+  if (campo === "checkout") {
+    return [1, 2, 3, 4].map((n) => op(`${plural(n, "noite")} · até ${br(somarDias(estado.checkin, n))}`, plural(n, "noite")))
+      .concat(op("Escolher data de saída", "", { tipo: "data", min: somarDias(estado.checkin, 1) }));
+  }
+  if (campo === "adultos") {
+    const q = hotel.quartos.find((x) => x.id === estado.quarto);
+    const combos = [[1, 0], [2, 0], [3, 0], [4, 0], [2, 1], [2, 2], [1, 1]]
+      .filter(([a, c]) => !q || (a <= q.capacidade_adultos && a + c <= q.capacidade_total));
+    return combos.map(([a, c]) => op(`${plural(a, "adulto")}${c ? ` + ${plural(c, "criança", "crianças")}` : ""}`, `${plural(a, "adulto")} e ${plural(c, "criança", "crianças")}`));
+  }
+  return [];
+}
+
+function pergunta(campo, hotel, estado, n) {
+  if (campo === "opcao") {
+    return `Para ${estado.periodo.nome}, separei estas opções:\n` +
+      estado.periodo.opcoes.map((o, i) => `${i + 1}) ${rotuloOpcao(o)}`).join("\n") + "\nQual fica melhor? Se preferir outras datas, é só dizer.";
+  }
+  if (campo === "quarto") return variar(["Qual quarto você prefere?", "Qual tipo de quarto combina mais com você?"], n);
+  if (campo === "checkin") return variar(["Para quando seria a entrada?", "Qual a data de chegada?"], n);
+  if (campo === "checkout") return `Entrada ${diaSemana(estado.checkin)}, ${br(estado.checkin)}. ${variar(["Quantas noites você vai ficar?", "E até quando fica?"], n)}`;
+  return variar(["Quantas pessoas vão se hospedar?", "Para quantas pessoas?"], n);
 }
 
 // Aplica uma mensagem ao estado do pedido
@@ -148,7 +186,7 @@ function aplicar(estado, texto, hotel, hoje) {
   const e = { ...estado };
   const info = [];
 
-  if (INTENCOES.reiniciar.test(t)) return { estado: vazio(), info: ["Tudo bem, vamos recomeçar."] };
+  if (INTENCOES.reiniciar.test(t)) return { estado: { ...vazio(), ativo: true }, info: [], entendeuAlgo: true, intencao: "reservar" };
   if (INTENCOES.atendente.test(t)) return { estado: e, atendente: texto };
 
   const { datas, resto } = extrairDatas(t, hoje);
@@ -181,7 +219,7 @@ function aplicar(estado, texto, hotel, hoje) {
   if (pessoas.criancas != null) e.criancas = pessoas.criancas;
 
   // Resposta curta só com número, para a pergunta que estava aberta
-  const sozinho = resto.match(new RegExp(`^(?:sao |seremos |somos |opcao |a |o )?${NUM}\\s*\\.?$`));
+  const sozinho = pendente && resto.match(new RegExp(`^(?:sao |seremos |somos |opcao |a |o )?${NUM}\\s*\\.?$`));
   if (sozinho && !datas.length) {
     const n = valorNum(sozinho[1]);
     const escolhida = pendente === "opcao" && e.periodo.opcoes[n - 1];
@@ -192,19 +230,44 @@ function aplicar(estado, texto, hotel, hoje) {
     else if (pendente === "checkout") e.noites = n;
   }
 
-  const entendeuAlgo = quarto || periodo || datas.length || noites || pessoas.adultos != null || pessoas.criancas != null || sozinho;
-  if (INTENCOES.quartos.test(t) && !quarto) {
-    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${q.capacidade_total} pessoas. A partir de ${reais(q.preco_a_partir)} a diária.`).join("\n"));
-  } else if (INTENCOES.preco.test(t)) {
-    const q = hotel.quartos.find((x) => x.id === (quarto ?? e.quarto));
+  const entendeuAlgo = Boolean(quarto || periodo || datas.length || noites || pessoas.adultos != null || pessoas.criancas != null || sozinho);
+  if (entendeuAlgo || INTENCOES.reservar.test(t)) e.ativo = true;
+
+  let intencao = null;
+  let quartosListados = false;
+  if (INTENCOES.quartos.test(t) || t === "ver detalhes dos quartos") {
+    intencao = "info";
+    quartosListados = true;
+    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. A partir de ${reais(q.preco_a_partir)} a diária.`).join("\n"));
+  } else if (INTENCOES.preco.test(t) && !entendeuAlgo) {
+    intencao = "info";
+    const q = hotel.quartos.find((x) => x.id === e.quarto);
     info.push(q
-      ? `${q.nome}: a partir de ${reais(q.preco_a_partir)} a diária. O valor final aparece na página de reserva.`
-      : "Diárias a partir de: " + hotel.quartos.map((x) => `${x.nome} ${reais(x.preco_a_partir)}`).join(", ") + ". O valor final aparece na página de reserva.");
+      ? `O ${q.nome} sai a partir de ${reais(q.preco_a_partir)} a diária. O valor final aparece na página de pagamento.`
+      : "As diárias começam em: " + hotel.quartos.map((x) => `${x.nome} ${reais(x.preco_a_partir)}`).join(", ") + ". O valor final aparece na página de pagamento.");
+  } else if (INTENCOES.duvidas.test(t)) {
+    intencao = "duvidas";
+  } else if (!entendeuAlgo && !INTENCOES.reservar.test(t)) {
+    // RAG: procura a resposta na base de conhecimento do hotel
+    const doc = porTitulo(texto) ?? buscar(texto);
+    if (doc) { intencao = "info"; info.push(doc.resposta); }
+    else if (INTENCOES.agradecer.test(t)) intencao = "agradecer";
+    else if (INTENCOES.despedida.test(t)) intencao = "despedida";
+    else if (INTENCOES.saudacao.test(t)) intencao = "saudacao";
+    else if (INTENCOES.pergunta.test(t)) intencao = "sem_resposta";
+    else intencao = "nao_entendi";
   }
-  if (INTENCOES.politicas.test(t)) info.push(`${hotel.politicas} Check-in a partir das ${hotel.checkin} e check-out até as ${hotel.checkout}.`);
-  if (INTENCOES.saudacao.test(t)) info.unshift(`Olá! Sou o assistente de reservas do ${hotel.nome}.`);
-  if (quarto && quarto !== estado.quarto) info.push(`Anotado: ${hotel.quartos.find((q) => q.id === quarto).nome}.`);
-  return { estado: e, info, entendeuAlgo };
+  if (INTENCOES.saudacao.test(t)) info.unshift(`Olá! Sou o assistente virtual do ${hotel.nome}.`);
+  return { estado: e, info, entendeuAlgo, intencao, quartos: quartosListados, novoQuarto: quarto && quarto !== estado.quarto ? quarto : null };
+}
+
+// Resumo do que já foi entendido, para o hóspede conferir no caminho
+function resumoParcial(e, hotel) {
+  const partes = [];
+  const q = hotel.quartos.find((x) => x.id === e.quarto);
+  if (q) partes.push(q.nome);
+  if (e.adultos) partes.push(`para ${plural(e.adultos, "adulto")}${e.criancas ? ` e ${plural(e.criancas, "criança", "crianças")}` : ""}`);
+  return partes.join(" ");
 }
 
 // Responde à última mensagem, refazendo o estado a partir das anteriores
@@ -217,23 +280,26 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
     estado = r.estado;
 
     if (r.atendente) {
-      saida = { texto: "Vou chamar um atendente do hotel para continuar com você. Em breve alguém responde por aqui.", acao: { tipo: "atendente", motivo: r.atendente.slice(0, 200) } };
+      saida = { texto: "Certo, vou chamar alguém da equipe do hotel para continuar com você. Em breve respondemos por aqui.", acao: { tipo: "atendente", motivo: r.atendente.slice(0, 200) }, opcoes: [] };
       return;
     }
 
-    let falta = faltando(estado);
     const partes = [...r.info];
     let acao = null;
-    if (!falta) {
+    let opcoes = null;
+    let falta = faltando(estado);
+
+    if (estado.ativo && !falta) {
       const checkout = estado.checkout ?? somarDias(estado.checkin, estado.noites);
       const pedido = { quarto_id: estado.quarto, checkin: estado.checkin, checkout, adultos: estado.adultos, criancas: estado.criancas ?? 0 };
       const v = validarPedido(hotel, pedido, new Date(hoje + "T12:00:00Z"));
       if (v.ok) {
-        const pessoas = `${pedido.adultos} adulto${pedido.adultos > 1 ? "s" : ""}${pedido.criancas ? ` e ${pedido.criancas} criança${pedido.criancas > 1 ? "s" : ""}` : ""}`;
-        partes.push(`Perfeito! ${v.quarto.nome}, de ${br(pedido.checkin)} a ${br(checkout)} (${v.noites} noite${v.noites > 1 ? "s" : ""}), ${pessoas}. A partir de ${reais(v.quarto.preco_a_partir)} a diária.\nReserve por este link: {link}`);
+        const pessoas = `${plural(pedido.adultos, "adulto")}${pedido.criancas ? ` e ${plural(pedido.criancas, "criança", "crianças")}` : ""}`;
+        partes.push(`${variar(["Perfeito!", "Prontinho!", "Tudo certo!"], i)} ${v.quarto.nome}, de ${diaSemana(pedido.checkin)} ${br(pedido.checkin)} a ${diaSemana(checkout)} ${br(checkout)} (${plural(v.noites, "noite")}), ${pessoas}.\n` +
+          `Total a partir de ${reais(v.quarto.preco_a_partir * v.noites)}.\nPara garantir, finalize por este link: {link}`);
         acao = { tipo: "link", pedido };
         estado = vazio();
-        falta = null;
+        opcoes = [op("Tirar uma dúvida", "Dúvidas sobre o hotel"), op("Fazer outra reserva", "nova reserva"), op("Falar com atendente")];
       } else {
         partes.push(v.erro);
         if (/comporta|quarto/i.test(v.erro)) estado.quarto = null;
@@ -241,13 +307,35 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
         falta = faltando(estado);
       }
     }
+
     if (falta) {
-      if (!r.entendeuAlgo && !r.info.length && falta !== "quarto" && !partes.length) partes.push("Não entendi bem.");
-      partes.push(pergunta(falta, hotel, estado));
+      // No meio da reserva: confirma o que entendeu e pergunta o próximo passo
+      let q = pergunta(falta, hotel, estado, i);
+      if (r.intencao === "info") q = `Voltando à sua reserva: ${q}`;
+      else if (r.intencao === "sem_resposta") q = `Não tenho essa informação aqui, mas posso chamar um atendente. Voltando à sua reserva: ${q}`;
+      else if (r.intencao === "nao_entendi" && !r.entendeuAlgo) q = `Desculpe, não entendi. ${q} Pode escolher uma das opções abaixo.`;
+      if (r.entendeuAlgo && r.novoQuarto && falta !== "quarto") partes.push(`${variar(["Ótima escolha", "Boa escolha"], i)}, ${resumoParcial(estado, hotel)}! ${q}`);
+      else if (r.entendeuAlgo) partes.push(`${variar(["Certo!", "Ótimo!", "Combinado."], i)} ${q}`);
+      else partes.push(q);
+      opcoes = botoes(falta, hotel, estado, hoje);
+      if (r.intencao === "sem_resposta") opcoes = opcoes.concat(op("Falar com atendente"));
+    } else if (!acao) {
+      // Fora de uma reserva: responde e oferece o menu
+      const fim = {
+        saudacao: "Como posso ajudar?",
+        agradecer: "Por nada! Posso ajudar em mais alguma coisa?",
+        despedida: "Até mais! Quando quiser reservar, é só chamar.",
+        duvidas: "Sobre o que você quer saber?",
+        sem_resposta: "Não encontrei essa informação. Quer que eu chame um atendente ou prefere ver as dúvidas mais comuns?",
+        nao_entendi: "Desculpe, não entendi. Posso te ajudar com uma destas opções:",
+      }[r.intencao] ?? (r.quartos ? "Quer reservar algum deles?" : variar(["Posso ajudar em mais alguma coisa?", "Quer ajuda com mais alguma coisa?"], i));
+      partes.push(fim);
+      opcoes = r.quartos ? botoes("quarto", hotel, estado, hoje).filter((o) => o.tipo !== "data" && o.texto !== "Ver detalhes dos quartos")
+        : r.intencao === "duvidas" ? topicos().map((x) => op(x)).concat(op("Falar com atendente"))
+        : r.intencao === "sem_resposta" ? [op("Falar com atendente"), op("Ver outras dúvidas", "Dúvidas sobre o hotel"), op("Fazer uma reserva")]
+        : r.intencao === "despedida" ? [] : MENU;
     }
-    // Botões de escolha para o chat web
-    const opcoes = falta === "opcao" ? estado.periodo.opcoes.map((o) => ({ rotulo: rotuloOpcao(o), texto: textoOpcao(o) })) : undefined;
-    if (ultima) saida = { texto: partes.join("\n\n"), acao, ...(opcoes ? { opcoes } : {}) };
+    if (ultima) saida = { texto: partes.join("\n\n"), acao, opcoes: opcoes ?? [] };
   });
-  return saida ?? { texto: pergunta("quarto", hotel), acao: null };
+  return saida ?? { texto: `Olá! Sou o assistente virtual do ${hotel.nome}. Como posso ajudar?`, acao: null, opcoes: MENU };
 }

@@ -107,7 +107,7 @@ async function responderSemIA({ conversaId, texto, canal, publicUrl }) {
     await marcarAtendente(conversaId, true, r.acao.motivo);
     eventos.push({ tipo: "atendente", motivo: r.acao.motivo });
   }
-  return { resposta, eventos, ...(r.opcoes ? { opcoes: r.opcoes } : {}) };
+  return { resposta, eventos, opcoes: r.opcoes ?? [] };
 }
 
 export async function responder({ conversaId, texto, canal = "web", publicUrl = process.env.PUBLIC_URL }) {

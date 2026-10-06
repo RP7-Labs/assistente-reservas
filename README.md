@@ -63,3 +63,11 @@ Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda dois e-m
 
 - Sem `RESEND_API_KEY` e `EMAIL_FROM`, os e-mails ficam só registrados no back-office (simulado).
 - Para agendar na Vercel: defina `CRON_SECRET`, rode `db/004_pagamentos.sql` e depois `db/005_cron_lembretes.sql` (pg_cron do Supabase chama `/api/tarefas/lembretes` a cada minuto). Localmente, o `npm start` já roda os lembretes sozinho.
+
+## Dúvidas do hotel (RAG local, sem custo)
+
+As respostas sobre o hotel ficam em `data/conhecimento.md`, uma seção `##` por assunto, com uma linha `Perguntas:` com jeitos diferentes de perguntar. O assistente busca a seção mais parecida (BM25, sem IA e sem custo) e responde com o texto dela. Para mudar uma resposta, basta editar o arquivo. Se nada parecido for encontrado, ele oferece chamar um atendente.
+
+## Botões no chat
+
+Cada passo da conversa vem com opções para tocar: menu inicial, quarto, data de entrada (hoje, amanhã, fim de semana ou calendário), noites, pessoas (respeitando a capacidade do quarto), datas de feriado e lista de dúvidas. No WhatsApp, até 3 opções viram botões e até 10 viram uma lista; datas são digitadas.

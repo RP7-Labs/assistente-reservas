@@ -13,13 +13,32 @@ test("pedido completo em uma mensagem gera link do quarto pedido", () => {
   assert.deepEqual(r.acao.pedido, { quarto_id: "estudio", checkin: "2026-10-10", checkout: "2026-10-12", adultos: 2, criancas: 0 });
 });
 
-test("conversa passo a passo pergunta só o que falta", () => {
-  assert.match(conversa("oi").texto, /Qual quarto/);
-  assert.match(conversa("oi", "suíte").texto, /entrada/);
-  assert.match(conversa("oi", "suíte", "dia 20").texto, /saída/);
-  assert.match(conversa("oi", "suíte", "dia 20", "3 noites").texto, /Quantas pessoas/);
+test("conversa passo a passo pergunta só o que falta, com botões", () => {
+  const oi = conversa("oi");
+  assert.match(oi.texto, /Como posso ajudar/);
+  assert.ok(oi.opcoes.some((o) => o.texto === "Fazer uma reserva"));
+  const q = conversa("oi", "Fazer uma reserva");
+  assert.deepEqual(q.opcoes.slice(0, 3).map((o) => o.texto), ["Estúdio", "Suíte", "Quarto Família"]);
+  const d = conversa("oi", "Fazer uma reserva", "Suíte");
+  assert.match(d.texto, /chegada|entrada/);
+  assert.ok(d.opcoes.some((o) => o.tipo === "data"));
+  assert.match(conversa("oi", "suíte", "dia 20").texto, /Entrada terça, 20\/10/);
+  const p = conversa("oi", "suíte", "dia 20", "3 noites");
+  assert.match(p.texto, /pessoas/);
+  // botões de pessoas respeitam a capacidade da suíte (2 pessoas)
+  assert.ok(p.opcoes.every((o) => !/3 adultos|2 adultos \+/.test(o.rotulo)));
   const r = conversa("oi", "suíte", "dia 20", "3 noites", "2");
   assert.deepEqual(r.acao.pedido, { quarto_id: "suite", checkin: "2026-10-20", checkout: "2026-10-23", adultos: 2, criancas: 0 });
+});
+
+test("dúvidas respondem pela base de conhecimento, sem perder a reserva", () => {
+  assert.match(conversa("aceita cachorro?").texto, /animais de estimação/);
+  assert.match(conversa("tem piscina?").texto, /Não encontrei/);
+  const r = conversa("suíte dia 20", "tem garagem?");
+  assert.match(r.texto, /estacionamento[\s\S]*Voltando à sua reserva: Entrada terça/i);
+  const t = conversa("Dúvidas sobre o hotel");
+  assert.ok(t.opcoes.some((o) => o.texto === "Wi-Fi"));
+  assert.match(conversa("Dúvidas sobre o hotel", "Wi-Fi").texto, /gratuito/);
 });
 
 test("grupo que não cabe recebe sugestão e pergunta outro quarto", () => {

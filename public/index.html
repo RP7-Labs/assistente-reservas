@@ -15,13 +15,15 @@
   button { padding:10px 16px; border:0; border-radius:10px; background:var(--me); color:#fff; font:inherit; cursor:pointer }
   .opcoes { align-self:flex-start; display:flex; flex-wrap:wrap; gap:6px; max-width:85% }
   .opcoes button { background:#fff; color:var(--me); border:1px solid var(--me); padding:6px 12px; border-radius:999px; font-size:14px }
+  a.cta { align-self:flex-start; background:var(--me); color:#fff; text-decoration:none; padding:10px 18px; border-radius:10px; font-weight:600 }
+  .opcoes .data { display:flex; gap:6px; align-items:center } .opcoes input[type=date] { flex:none; padding:5px 8px; border-radius:999px; border:1px solid var(--me); font-size:14px }
 </style>
 </head>
 <body>
 <main>
   <h1>Assistente de Reservas</h1>
-  <div id="log"><div class="m bot">Olá! Posso te ajudar a reservar. Qual quarto e quais datas você procura?</div></div>
-  <form id="f"><input id="t" autocomplete="off" placeholder="Digite sua mensagem"><button>Enviar</button></form>
+  <div id="log"></div>
+  <form id="f"><input id="t" autocomplete="off" placeholder="Escolha uma opção ou digite"><button>Enviar</button></form>
 </main>
 <script>
 const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
@@ -32,12 +34,20 @@ function add(cls, txt) {
                    .replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   log.appendChild(d); log.scrollTop = log.scrollHeight;
 }
-// Botões de datas sugeridas (feriados, fim de semana)
+// Botões de resposta rápida: o hóspede escolhe em vez de digitar
 function addOpcoes(opcoes) {
   const d = document.createElement("div"); d.className = "opcoes";
   for (const o of opcoes) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = o.rotulo;
-    b.onclick = () => { d.remove(); enviar(o.texto, o.rotulo); };
+    if (o.tipo === "data") {
+      // Seletor de data: abre o calendário e envia a data escolhida
+      b.onclick = () => {
+        const box = document.createElement("span"); box.className = "data";
+        const inp = document.createElement("input"); inp.type = "date"; if (o.min) inp.min = o.min;
+        inp.onchange = () => { if (!inp.value) return; const br = inp.value.split("-").reverse().join("/"); d.remove(); enviar(br, br); };
+        box.appendChild(inp); b.replaceWith(box); inp.showPicker?.(); inp.focus();
+      };
+    } else b.onclick = () => { d.remove(); enviar(o.texto, o.rotulo); };
     d.appendChild(b);
   }
   log.appendChild(d); log.scrollTop = log.scrollHeight;
@@ -53,10 +63,19 @@ async function enviar(texto, mostrar) {
     const r = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ conversaId:id, texto }) });
     const j = await r.json();
     add("bot", j.resposta || j.erro || "Erro");
-    for (const ev of j.eventos || []) add("ev", ev.tipo === "link" ? `link gerado: ${ev.quarto}` : `encaminhado ao atendente: ${ev.motivo}`);
+    for (const ev of j.eventos || []) {
+      if (ev.tipo === "link") {
+        // Botão direto para o pagamento
+        const a = document.createElement("a"); a.className = "cta"; a.href = ev.link; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = `Pagar e confirmar · ${ev.quarto}`; log.appendChild(a);
+      } else add("ev", `encaminhado ao atendente`);
+    }
     if (j.opcoes?.length) addOpcoes(j.opcoes);
   } catch { add("bot", "Falha de conexão."); }
 }
+add("bot", "Olá! Sou o assistente virtual do hotel. Como posso ajudar?");
+addOpcoes([{ rotulo: "Fazer uma reserva", texto: "Fazer uma reserva" }, { rotulo: "Ver quartos e preços", texto: "Ver quartos e preços" },
+  { rotulo: "Dúvidas sobre o hotel", texto: "Dúvidas sobre o hotel" }, { rotulo: "Falar com atendente", texto: "Falar com atendente" }]);
 </script>
 </body>
 </html>

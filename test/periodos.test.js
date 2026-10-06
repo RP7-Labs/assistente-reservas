@@ -34,3 +34,11 @@ test("chat oferece as opções e aceita o número escolhido", () => {
   const r3 = responderPorRegras(hotel, ["suíte no natal para casal", r1.opcoes[2].texto], HOJE);
   assert.equal(r3.acao.pedido.checkout, "2026-12-27");
 });
+
+test("conhecimento: busca encontra a seção certa", async () => {
+  const { buscar } = await import("../src/conhecimento.js");
+  assert.equal(buscar("vcs tem garagem").titulo, "Estacionamento");
+  assert.equal(buscar("como faço pra cancelar").titulo, "Cancelamento");
+  assert.equal(buscar("onde vocês ficam").titulo, "Localização");
+  assert.equal(buscar("quero a suíte dia 20"), null);
+});

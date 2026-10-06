@@ -1,8 +1,22 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/r/(.*)", "destination": "/api" },
-    { "source": "/webhook/(.*)", "destination": "/api" }
-  ]
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/r/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/webhook/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "data/*.md"
+    }
+  }
 }
