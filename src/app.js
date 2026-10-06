@@ -7,9 +7,23 @@ import { rotasWhatsapp } from "./whatsapp.js";
 export const app = express();
 app.use(express.json());
 
+// Mostra o que já está configurado, sem expor valores
+app.get("/api/status", (_req, res) => {
+  const tem = (v) => Boolean(process.env[v]);
+  res.json({
+    ia: tem("ANTHROPIC_API_KEY"),
+    banco: tem("SUPABASE_URL") && tem("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "arquivo local",
+    public_url: process.env.PUBLIC_URL || null,
+    whatsapp: tem("WHATSAPP_TOKEN") && tem("WHATSAPP_PHONE_NUMBER_ID"),
+  });
+});
+
 app.post("/api/chat", async (req, res) => {
   const { conversaId, texto } = req.body ?? {};
   if (!conversaId || !texto) return res.status(400).json({ erro: "conversaId e texto são obrigatórios" });
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ erro: "O assistente ainda não está ativo: falta configurar a chave da IA (ANTHROPIC_API_KEY)." });
+  }
   try {
     res.json(await responder({ conversaId, texto, canal: "web" }));
   } catch (err) {
