@@ -6,7 +6,10 @@ import {
   listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
+  listarCanais, listarBloqueios, salvarCanal, removerCanal,
 } from "./store.js";
+import { novoToken, urlValida } from "./ical.js";
+import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento } from "./pagamento.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
@@ -125,8 +128,54 @@ admin.post("/conversas/:id/resolver", rota(async (req, res) => {
 
 admin.get("/quartos", rota(async (req, res) => {
   const data = DATA_RE.test(req.query.data ?? "") ? req.query.data : new Date().toISOString().slice(0, 10);
-  const { leads, reservas } = await listarDados();
-  res.json({ data, quartos: disponibilidade(carregarHotel(), reservas, leads, data) });
+  const [{ leads, reservas }, bloqueios] = await Promise.all([listarDados(), bloqueiosOuNada()]);
+  res.json({ data, quartos: disponibilidade(carregarHotel(), reservas, leads, data, bloqueios) });
+}));
+
+// ---- Canais por iCal (Airbnb, Booking.com) ----
+
+const urlExportar = (req, c) => `${(process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "")}/api/ical/${c.token_exportar}.ics`;
+
+admin.get("/canais", rota(async (req, res) => {
+  let canais, bloqueios, pendente = null;
+  try {
+    [canais, bloqueios] = await Promise.all([listarCanais(), listarBloqueios()]);
+  } catch (err) {
+    canais = []; bloqueios = [];
+    pendente = `Rode a migração db/006_canais_ical.sql no Supabase (${err.message})`;
+  }
+  const hoje = new Date().toISOString().slice(0, 10);
+  res.json({
+    pendente,
+    minutos_sync: MINUTOS_SYNC,
+    quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome, unidades: q.unidades })),
+    canais: canais.map((c) => ({
+      id: c.id, nome: c.nome, quarto_id: c.quarto_id, url_importar: c.url_importar, ultimo_sync: c.ultimo_sync, erro: c.erro,
+      url_exportar: urlExportar(req, c),
+      bloqueios: bloqueios.filter((b) => b.canal_id === c.id && b.checkout > hoje).map((b) => ({ checkin: b.checkin, checkout: b.checkout, resumo: b.resumo })),
+    })),
+  });
+}));
+
+admin.post("/canais", rota(async (req, res) => {
+  const b = req.body ?? {};
+  const nome = String(b.nome ?? "").trim().slice(0, 80);
+  const url = String(b.url_importar ?? "").trim();
+  if (!nome) return res.status(400).json({ erro: "Dê um nome ao canal, ex.: Airbnb · Suíte 1." });
+  if (!carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  if (url && !urlValida(url)) return res.status(400).json({ erro: "O link do calendário precisa começar com https://." });
+  const canal = await salvarCanal({ id: crypto.randomBytes(5).toString("hex"), nome, quarto_id: b.quarto_id, url_importar: url || null, token_exportar: novoToken() });
+  const sync = await sincronizarCanal(canal);
+  res.json({ ok: true, id: canal.id, sync });
+}));
+
+admin.delete("/canais/:id", rota(async (req, res) => {
+  await removerCanal(req.params.id);
+  res.json({ ok: true });
+}));
+
+admin.post("/canais/sincronizar", rota(async (_req, res) => {
+  res.json({ resultados: await sincronizarCanais({ forcar: true }) });
 }));
 
 // Registra uma reserva: a partir de um link do assistente (lead_id) ou lançada à mão

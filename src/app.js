@@ -6,6 +6,7 @@ import { rotasWhatsapp } from "./whatsapp.js";
 import { admin } from "./admin.js";
 import { pagamento, rotaLembretes } from "./pagamento.js";
 import { modoEmail } from "./email.js";
+import { calendarioExportado, sincronizarCanais } from "./canais.js";
 
 export const app = express();
 app.use(express.json());
@@ -90,9 +91,27 @@ app.get("/api/metricas", async (_req, res) => {
   }
 });
 
+// Calendário iCal que o Airbnb (ou outro canal) importa. O token no link é o segredo.
+app.get("/api/ical/:arquivo", async (req, res) => {
+  try {
+    const ics = await calendarioExportado(req.params.arquivo.replace(/\.ics$/, ""));
+    if (!ics) return res.status(404).send("Calendário não encontrado");
+    res.set({ "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store" }).send(ics);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erro");
+  }
+});
+
 app.use("/api/admin", admin);
 app.use("/api/pagamento", pagamento);
-// Lembretes de pagamento por e-mail; chamado a cada minuto pelo agendador (pg_cron do Supabase)
-app.all("/api/tarefas/lembretes", rotaLembretes);
+// Tarefas do agendador (pg_cron do Supabase, a cada minuto): sincroniza os calendários vencidos
+// e manda os lembretes de pagamento por e-mail. A rota de lembretes confere o CRON_SECRET.
+app.all("/api/tarefas/lembretes", async (req, res, next) => {
+  if (process.env.CRON_SECRET && req.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
+    await sincronizarCanais().catch((err) => console.error("iCal:", err.message));
+  }
+  next();
+}, rotaLembretes);
 
 rotasWhatsapp(app);

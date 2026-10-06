@@ -4,6 +4,7 @@ import express from "express";
 import { carregarHotel } from "./catalogo.js";
 import { buscarLead, buscarPagamento, salvarPagamento, salvarReserva, listarDados, pagamentosSemLembrete } from "./store.js";
 import { disponibilidade } from "./backoffice.js";
+import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
 import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
 
@@ -66,11 +67,13 @@ export function resumoPedido(hotel, lead) {
   };
 }
 
-// Confere se há quarto livre em todas as noites da estadia (pelas reservas registradas aqui)
+// Confere se há quarto livre em todas as noites da estadia (reservas daqui e bloqueios do Airbnb e outros canais)
 async function temVaga(hotel, lead) {
-  const { leads, reservas } = await listarDados();
+  // Lê de novo os calendários externos vencidos, para não vender uma noite já reservada no Airbnb
+  await sincronizarCanais().catch((err) => console.error("iCal:", err.message));
+  const [{ leads, reservas }, bloqueios] = await Promise.all([listarDados(), bloqueiosOuNada()]);
   for (let d = lead.checkin; d < lead.checkout; d = new Date(Date.parse(d) + 86_400_000).toISOString().slice(0, 10)) {
-    const q = disponibilidade(hotel, reservas, leads, d).find((x) => x.id === lead.quarto_id);
+    const q = disponibilidade(hotel, reservas, leads, d, bloqueios).find((x) => x.id === lead.quarto_id);
     if (!q || q.livres < 1) return false;
   }
   return true;

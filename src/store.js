@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [] };
   }
 }
 function gravarArquivo(db) {
@@ -272,4 +272,54 @@ export async function registrarEmail(email) {
 export async function listarEmails(limite = 100) {
   if (sb) return verificar(await sb.from("emails").select("*").order("criado_em", { ascending: false }).limit(limite));
   return [...lerArquivo().emails].reverse().slice(0, limite);
+}
+
+// ---- Canais por iCal (Airbnb, Booking.com) e bloqueios importados ----
+
+export async function listarCanais() {
+  if (sb) return verificar(await sb.from("canais").select("*").order("criado_em"));
+  return lerArquivo().canais;
+}
+
+export async function buscarCanalPorToken(token) {
+  if (sb) return verificar(await sb.from("canais").select("*").eq("token_exportar", token).maybeSingle());
+  return lerArquivo().canais.find((c) => c.token_exportar === token) ?? null;
+}
+
+export async function salvarCanal(canal) {
+  if (sb) return verificar(await sb.from("canais").upsert(canal).select().single());
+  const db = lerArquivo();
+  const i = db.canais.findIndex((c) => c.id === canal.id);
+  if (i >= 0) db.canais[i] = { ...db.canais[i], ...canal };
+  else db.canais.push({ criado_em: new Date().toISOString(), ...canal });
+  gravarArquivo(db);
+  return db.canais[i >= 0 ? i : db.canais.length - 1];
+}
+
+export async function removerCanal(id) {
+  if (sb) {
+    verificar(await sb.from("canais").delete().eq("id", id));
+    return;
+  }
+  const db = lerArquivo();
+  db.canais = db.canais.filter((c) => c.id !== id);
+  db.bloqueios = db.bloqueios.filter((b) => b.canal_id !== id);
+  gravarArquivo(db);
+}
+
+// Troca todos os bloqueios do canal pelos que vieram na última leitura do calendário
+export async function trocarBloqueios(canalId, bloqueios) {
+  if (sb) {
+    verificar(await sb.from("bloqueios").delete().eq("canal_id", canalId));
+    if (bloqueios.length) verificar(await sb.from("bloqueios").insert(bloqueios));
+    return;
+  }
+  const db = lerArquivo();
+  db.bloqueios = [...db.bloqueios.filter((b) => b.canal_id !== canalId), ...bloqueios];
+  gravarArquivo(db);
+}
+
+export async function listarBloqueios() {
+  if (sb) return verificar(await sb.from("bloqueios").select("*").order("checkin"));
+  return [...lerArquivo().bloqueios].sort((a, b) => a.checkin.localeCompare(b.checkin));
 }

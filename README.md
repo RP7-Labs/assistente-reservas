@@ -82,3 +82,15 @@ Para uma conversa mais livre sem pagar, coloque na Vercel `LLM_API_KEY` (e `LLM_
 - Se a IA falhar ou demorar (limite do plano grátis, rede), aquela mensagem é respondida pelas regras.
 - Prioridade: `ANTHROPIC_API_KEY` (Claude) > `LLM_API_KEY` (grátis) > regras. `ASSISTENTE_MODO=regras|gratis|ia` força um modo.
 - Atenção: no plano grátis do Gemini, o Google pode usar as conversas para melhorar os produtos dele. Use só para testes, sem dados reais de hóspedes.
+
+## Airbnb e outros canais (iCal)
+
+A API do Airbnb só é liberada para parceiros convidados, então a integração usa a sincronização de calendário por iCal, que todo anfitrião tem.
+
+1. Rode `db/006_canais_ical.sql` no Supabase.
+2. No back-office, aba **Canais**: cole o link de *Exportar calendário* do anúncio e escolha o tipo de quarto. Cada anúncio ocupa uma unidade desse tipo.
+3. Copie o "Link para o canal importar" e cole em *Importar calendário* no Airbnb.
+
+- **Airbnb → aqui:** reservas e bloqueios do anúncio ocupam a unidade e saem da venda. Lemos a cada `ICAL_MINUTOS` (padrão 10) pelo mesmo pg_cron dos lembretes e de novo antes de cada pagamento. Se o Airbnb sair do ar, os bloqueios anteriores ficam.
+- **Aqui → Airbnb:** `/api/ical/<token>.ics` publica as noites em que o tipo de quarto lota (reservas daqui e de outros canais). O Airbnb lê esse link no ritmo dele.
+- Limites do iCal: não traz preço nem dados do hóspede, e a leitura do lado do Airbnb não é imediata, então há uma janela pequena de reserva dupla.

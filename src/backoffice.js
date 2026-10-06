@@ -62,12 +62,13 @@ function resumoPagamento(p) {
   return { status: p.status, metodo: p.metodo, nome: p.nome, email: p.email, valor: p.valor != null ? Number(p.valor) : null, cartao: p.cartao_final ? `${p.cartao_bandeira} •••• ${p.cartao_final}` : null, iniciado_em: p.iniciado_em, lembrete_em: p.lembrete_em ?? null, pago_em: p.pago_em ?? null };
 }
 
-// Ocupação por tipo de quarto numa data, com base nas reservas registradas aqui
-export function disponibilidade(hotel, reservas, leads, data) {
+// Ocupação por tipo de quarto numa data: reservas registradas aqui e bloqueios dos canais (Airbnb etc.)
+export function disponibilidade(hotel, reservas, leads, data, bloqueios = []) {
   const ocupa = (r) => r.checkin <= data && data < r.checkout;
   const comReserva = new Set(reservas.map((r) => r.lead_id).filter(Boolean));
   return hotel.quartos.map((q) => {
-    const ocupadas = reservas.filter((r) => r.quarto_id === q.id && ATIVAS.has(r.status) && ocupa(r)).length;
+    const externas = bloqueios.filter((b) => b.quarto_id === q.id && ocupa(b)).length;
+    const ocupadas = reservas.filter((r) => r.quarto_id === q.id && ATIVAS.has(r.status) && ocupa(r)).length + externas;
     const emProcesso = leads.filter((l) => l.quarto_id === q.id && !comReserva.has(l.id) && ocupa(l)).length;
     const unidades = q.unidades ?? 0;
     return {
@@ -75,6 +76,7 @@ export function disponibilidade(hotel, reservas, leads, data) {
       nome: q.nome,
       unidades,
       ocupadas,
+      externas,
       livres: Math.max(unidades - ocupadas, 0),
       em_processo: emProcesso,
       preco_a_partir: q.preco_a_partir,
