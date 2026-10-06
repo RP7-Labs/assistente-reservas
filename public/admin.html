@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Back-office de Reservas</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --card2:#273449; --tx:#e2e8f0; --mut:#94a3b8; --dim:#64748b;
+          --ok:#4ade80; --warn:#facc15; --err:#f87171; --info:#60a5fa; --acc:#2dd4bf; }
+  * { box-sizing:border-box } [hidden] { display:none !important }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.45 system-ui,-apple-system,sans-serif }
+  main { max-width:1100px; margin:0 auto; padding:28px 16px 60px }
+  h1 { font-size:24px; margin:0 } h2 { font-size:13px; letter-spacing:.08em; color:var(--dim); text-transform:uppercase; margin:28px 0 10px }
+  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px }
+  header .sair { margin-left:auto }
+  nav { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px }
+  nav button { background:var(--card); color:var(--mut); border:0; padding:9px 14px; border-radius:8px; font:inherit; cursor:pointer }
+  nav button.ativo { background:var(--acc); color:#042f2e; font-weight:600 }
+  nav .badge { background:var(--err); color:#fff; border-radius:10px; padding:0 7px; font-size:12px; margin-left:4px }
+  button.btn, .btn { background:var(--card2); color:var(--tx); border:1px solid #334155; padding:7px 12px; border-radius:7px; font:inherit; font-size:14px; cursor:pointer }
+  .btn.prim { background:var(--acc); color:#042f2e; border:0; font-weight:600 }
+  input, select { background:var(--bg); color:var(--tx); border:1px solid #334155; border-radius:7px; padding:8px 10px; font:inherit; font-size:14px }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px }
+  .kpi { background:var(--card); border-radius:10px; padding:14px 16px }
+  .kpi .v { font-size:26px; font-weight:700 } .kpi .l { color:var(--mut); font-size:13px }
+  .lista .item { background:var(--card); border-radius:9px; padding:13px 16px; margin-bottom:8px; display:flex; gap:14px; align-items:center; flex-wrap:wrap }
+  .lista .item.clicavel { cursor:pointer } .lista .item.clicavel:hover { background:var(--card2) }
+  .grow { flex:1; min-width:200px } .mut { color:var(--mut); font-size:13px } .mono { font:13px ui-monospace,monospace; color:var(--dim) }
+  .tag { font-size:12px; padding:2px 8px; border-radius:20px; background:var(--card2); color:var(--mut); white-space:nowrap }
+  .t-ok { background:#14532d; color:var(--ok) } .t-warn { background:#422006; color:var(--warn) } .t-err { background:#450a0a; color:var(--err) } .t-info { background:#172554; color:var(--info) }
+  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden }
+  th, td { text-align:left; padding:11px 12px; border-bottom:1px solid #334155; font-size:14px; vertical-align:middle }
+  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em }
+  tr:last-child td { border-bottom:0 }
+  .tabela { overflow-x:auto }
+  .barra { height:8px; background:var(--card2); border-radius:4px; overflow:hidden; min-width:120px }
+  .barra span { display:block; height:100% }
+  .filtros { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
+  dialog { background:var(--card); color:var(--tx); border:1px solid #334155; border-radius:12px; width:min(640px, calc(100vw - 32px)); max-height:85vh; padding:20px }
+  dialog::backdrop { background:rgba(0,0,0,.6) }
+  .fala { padding:8px 12px; border-radius:12px; margin:6px 0; max-width:85%; white-space:pre-wrap; word-break:break-word }
+  .f-hospede { background:#0f766e; margin-left:auto } .f-assistente { background:var(--card2) } .f-sistema { background:transparent; color:var(--mut); font-size:13px; text-align:center; max-width:100% }
+  .falas { display:flex; flex-direction:column }
+  form.grade { display:grid; grid-template-columns:1fr 1fr; gap:10px } form.grade label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mut) }
+  form.grade .full { grid-column:1 / -1 }
+  #login { max-width:340px; margin:12vh auto; background:var(--card); padding:28px; border-radius:12px; display:flex; flex-direction:column; gap:12px }
+  .erro { color:var(--err); font-size:14px; min-height:1em }
+  .vazio { color:var(--dim); padding:20px; text-align:center; background:var(--card); border-radius:9px }
+  .aviso { color:var(--mut); font-size:13px; margin-top:8px }
+  @media (max-width:600px) { form.grade { grid-template-columns:1fr } .kpi .v { font-size:22px } }
+</style>
+</head>
+<body>
+<div id="login">
+  <h1>Back-office</h1>
+  <input id="senha" type="password" placeholder="Senha" autocomplete="current-password">
+  <button class="btn prim" id="entrar">Entrar</button>
+  <div class="erro" id="loginErro"></div>
+</div>
+
+<main id="app" hidden>
+  <header>
+    <h1>Back-office de Reservas</h1>
+    <span class="mut" id="atualizado"></span>
+    <button class="btn sair" id="recarregar">Atualizar</button>
+    <button class="btn" id="sair">Sair</button>
+  </header>
+  <nav id="abas">
+    <button data-aba="geral" class="ativo">Visão geral</button>
+    <button data-aba="atendimentos">Atendimentos <span class="badge" id="badgeAtend" hidden></span></button>
+    <button data-aba="locacoes">Locações</button>
+    <button data-aba="quartos">Quartos</button>
+  </nav>
+
+  <section data-sec="geral">
+    <div class="kpis" id="kpis"></div>
+    <h2>Aguardando atendente</h2>
+    <div class="lista" id="geralAtend"></div>
+    <h2>Locações em processo</h2>
+    <div class="lista" id="geralProc"></div>
+  </section>
+
+  <section data-sec="atendimentos" hidden>
+    <div class="filtros">
+      <select id="fAtend"><option value="">Todos</option><option value="atendente">Aguardando atendente</option><option value="link">Gerou link</option></select>
+    </div>
+    <div class="lista" id="listaAtend"></div>
+  </section>
+
+  <section data-sec="locacoes" hidden>
+    <div class="filtros">
+      <select id="fLoc">
+        <option value="">Todos os status</option>
+        <option value="processo">Em processo</option>
+        <option value="confirmada">Confirmadas</option>
+        <option value="concluida">Concluídas</option>
+        <option value="cancelada">Canceladas / no-show</option>
+        <option value="nao_convertido">Não convertidas</option>
+      </select>
+      <button class="btn prim" id="novaReserva">+ Registrar reserva</button>
+    </div>
+    <div class="tabela"><table>
+      <thead><tr><th>Status</th><th>Quarto</th><th>Período</th><th>Origem</th><th>Hóspede</th><th>Valor</th><th></th></tr></thead>
+      <tbody id="tbLoc"></tbody>
+    </table></div>
+    <p class="aviso">Os links vêm do assistente. Quando a reserva for confirmada na Gasystem, use "Confirmar" para registrar o código e o valor. É isso que mede a conversão e a comissão economizada.</p>
+  </section>
+
+  <section data-sec="quartos" hidden>
+    <div class="filtros">
+      <label class="mut">Data <input type="date" id="dataQuartos"></label>
+    </div>
+    <div class="tabela"><table>
+      <thead><tr><th>Quarto</th><th>Capacidade</th><th>A partir de</th><th>Ocupação</th><th>Livres</th><th>Em processo</th></tr></thead>
+      <tbody id="tbQuartos"></tbody>
+    </table></div>
+    <p class="aviso">A disponibilidade considera as reservas registradas aqui. Enquanto não houver integração com a Gasystem, reservas feitas por outros canais precisam ser lançadas em "Registrar reserva".</p>
+  </section>
+</main>
+
+<dialog id="dlgConversa">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <strong id="dcTitulo"></strong><span class="tag" id="dcCanal"></span>
+    <button class="btn" style="margin-left:auto" data-fechar>Fechar</button>
+  </div>
+  <div id="dcAtend"></div>
+  <div class="falas" id="dcFalas"></div>
+</dialog>
+
+<dialog id="dlgReserva">
+  <strong id="drTitulo">Registrar reserva</strong>
+  <form class="grade" id="formReserva" style="margin-top:14px">
+    <input type="hidden" name="lead_id">
+    <label>Quarto <select name="quarto_id" required></select></label>
+    <label>Código na Gasystem <input name="codigo_motor" placeholder="opcional"></label>
+    <label>Check-in <input type="date" name="checkin" required></label>
+    <label>Check-out <input type="date" name="checkout" required></label>
+    <label>Hóspede <input name="hospede" placeholder="nome"></label>
+    <label>Valor total (R$) <input name="valor" type="number" min="0" step="0.01"></label>
+    <div class="erro full" id="drErro"></div>
+    <div class="full" style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn" data-fechar>Cancelar</button>
+      <button class="btn prim">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = (v) => v == null ? "—" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const dataBR = (s) => s ? s.slice(0, 10).split("-").reverse().join("/") : "—";
+const quando = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+const hojeISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+const STATUS = {
+  link_enviado: ["Link enviado", "t-info"], clicou: ["Clicou no link", "t-warn"],
+  confirmada: ["Confirmada", "t-ok"], concluida: ["Concluída", "t-ok"],
+  cancelada: ["Cancelada", "t-err"], no_show: ["No-show", "t-err"], nao_convertido: ["Não convertido", ""],
+};
+const tagStatus = (s) => { const [t, c] = STATUS[s] ?? [s, ""]; return `<span class="tag ${c}">${esc(t)}</span>`; };
+
+let senha = "";
+try { senha = sessionStorage.getItem("adminSenha") || ""; } catch {}
+let painel = null;
+let nomes = {};
+
+async function api(caminho, opcoes = {}) {
+  const r = await fetch("/api/admin" + caminho, {
+    ...opcoes,
+    headers: { "Content-Type": "application/json", "x-admin-senha": senha, ...(opcoes.headers || {}) },
+  });
+  const corpo = await r.json().catch(() => ({}));
+  if (r.status === 401) { sair(); throw new Error("Senha incorreta"); }
+  if (!r.ok) throw new Error(corpo.erro || `Erro ${r.status}`);
+  return corpo;
+}
+
+function sair() {
+  senha = "";
+  try { sessionStorage.removeItem("adminSenha"); } catch {}
+  $("#app").hidden = true; $("#login").hidden = false;
+}
+
+async function entrar() {
+  senha = $("#senha").value;
+  $("#loginErro").textContent = "";
+  try {
+    await api("/login");
+    try { sessionStorage.setItem("adminSenha", senha); } catch {}
+    $("#login").hidden = true; $("#app").hidden = false;
+    await carregar();
+  } catch (e) { $("#loginErro").textContent = e.message; }
+}
+
+async function carregar() {
+  painel = await api("/painel");
+  nomes = Object.fromEntries(painel.quartos.map((q) => [q.id, q.nome]));
+  $("#atualizado").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR");
+  desenharGeral(); desenharAtend(); desenharLoc(); await carregarQuartos();
+}
+
+function desenharGeral() {
+  const i = painel.indicadores;
+  const k = [
+    ["Atendimentos (7 dias)", i.atendimentos_7d], ["Aguardando atendente", i.aguardando_atendente],
+    ["Links gerados", i.links_gerados], ["Links clicados", i.links_clicados],
+    ["Em processo", i.em_processo], ["Reservas confirmadas", i.reservas_confirmadas],
+    ["Conversão do assistente", (i.conversao * 100).toFixed(1).replace(".", ",") + "%"],
+    ["Receita via assistente", brl(i.receita_assistente)], ["Comissão economizada*", brl(i.comissao_economizada)],
+  ];
+  $("#kpis").innerHTML = k.map(([l, v]) => `<div class="kpi"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("") +
+    `<div class="kpi" style="grid-column:1/-1;padding:8px 16px"><span class="mut">* 15% sobre a receita das reservas que vieram do assistente, comparado a vender pelos portais.</span></div>`;
+  const b = $("#badgeAtend"); b.hidden = !i.aguardando_atendente; b.textContent = i.aguardando_atendente;
+
+  const aguard = painel.atendimentos.filter((a) => a.precisa_atendente);
+  $("#geralAtend").innerHTML = aguard.length ? aguard.map(itemAtend).join("") : `<div class="vazio">Nenhum atendimento aguardando.</div>`;
+  const proc = painel.locacoes.filter((l) => ["link_enviado", "clicou"].includes(l.status)).slice(0, 8);
+  $("#geralProc").innerHTML = proc.length ? proc.map((l) =>
+    `<div class="item">${tagStatus(l.status)}<div class="grow"><strong>${esc(nomes[l.quarto_id] || l.quarto_id)}</strong> · ${dataBR(l.checkin)} a ${dataBR(l.checkout)} <span class="mut">· ${esc(l.hospedes || "")} · ${esc(l.origem)}</span></div>
+     <button class="btn" data-confirmar="${esc(l.lead_id)}">Confirmar</button></div>`).join("") : `<div class="vazio">Nada em processo.</div>`;
+}
+
+function itemAtend(a) {
+  const tags = [
+    `<span class="tag">${esc(a.canal)}</span>`,
+    a.precisa_atendente ? `<span class="tag t-err">Aguardando atendente</span>` : "",
+    a.gerou_link ? `<span class="tag t-ok">Gerou link</span>` : "",
+  ].join(" ");
+  return `<div class="item clicavel" data-conversa="${esc(a.id)}">
+    <div class="grow"><div>${tags}</div><div style="margin-top:6px">${esc(a.ultima) || '<span class="mut">sem mensagens</span>'}</div>
+    ${a.motivo_atendente ? `<div class="mut">Motivo: ${esc(a.motivo_atendente)}</div>` : ""}</div>
+    <div class="mut" style="text-align:right">${quando(a.atualizado_em)}<br>${a.mensagens} msg</div></div>`;
+}
+
+function desenharAtend() {
+  const f = $("#fAtend").value;
+  const l = painel.atendimentos.filter((a) => !f || (f === "atendente" ? a.precisa_atendente : a.gerou_link));
+  $("#listaAtend").innerHTML = l.length ? l.map(itemAtend).join("") : `<div class="vazio">Nenhum atendimento ainda.</div>`;
+}
+
+function desenharLoc() {
+  const f = $("#fLoc").value;
+  const filtro = {
+    "": () => true, processo: (l) => ["link_enviado", "clicou"].includes(l.status),
+    cancelada: (l) => ["cancelada", "no_show"].includes(l.status),
+  }[f] ?? ((l) => l.status === f);
+  const l = painel.locacoes.filter(filtro);
+  $("#tbLoc").innerHTML = l.length ? l.map((x) => {
+    let acoes = "";
+    if (["link_enviado", "clicou", "nao_convertido"].includes(x.status)) acoes = `<button class="btn" data-confirmar="${esc(x.lead_id)}">Confirmar</button>`;
+    else if (x.codigo_motor) acoes = `<select data-status="${esc(x.codigo_motor)}">${["confirmada", "concluida", "cancelada", "no_show"].map((s) =>
+      `<option value="${s}" ${s === x.status ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}</select>`;
+    const origem = x.lead_id ? `${esc(x.origem)}${x.conversa_id ? ` · <a href="#" data-conversa="${esc(x.conversa_id)}" style="color:var(--info)">conversa</a>` : ""}` : "manual";
+    return `<tr><td>${tagStatus(x.status)}</td><td>${esc(nomes[x.quarto_id] || x.quarto_id)}</td>
+      <td>${dataBR(x.checkin)} a ${dataBR(x.checkout)}<div class="mut">${esc(x.hospedes || "")}</div></td>
+      <td>${origem}<div class="mono">${esc(x.codigo_motor || "")}</div></td><td>${esc(x.hospede || "—")}</td><td>${brl(x.valor)}</td><td>${acoes}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhuma locação.</td></tr>`;
+}
+
+async function carregarQuartos() {
+  const data = $("#dataQuartos").value || hojeISO();
+  $("#dataQuartos").value = data;
+  const r = await api(`/quartos?data=${data}`);
+  $("#tbQuartos").innerHTML = r.quartos.map((q) => {
+    const pct = q.unidades ? Math.round((q.ocupadas / q.unidades) * 100) : 0;
+    const cor = pct >= 90 ? "var(--err)" : pct >= 60 ? "var(--warn)" : "var(--ok)";
+    return `<tr><td><strong>${esc(q.nome)}</strong></td><td class="mut">${esc(q.capacidade)}</td><td>${brl(q.preco_a_partir)}</td>
+      <td><div class="barra"><span style="width:${pct}%;background:${cor}"></span></div><span class="mut">${q.ocupadas}/${q.unidades} · ${pct}%</span></td>
+      <td><strong>${q.livres}</strong></td><td>${q.em_processo ? `<span class="tag t-warn">${q.em_processo}</span>` : "—"}</td></tr>`;
+  }).join("");
+}
+
+async function abrirConversa(id) {
+  const c = await api(`/conversas/${encodeURIComponent(id)}`);
+  $("#dcTitulo").textContent = "Atendimento";
+  $("#dcCanal").textContent = c.canal;
+  $("#dcAtend").innerHTML = c.precisa_atendente
+    ? `<div class="item" style="background:#450a0a;border-radius:8px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center">
+        <span class="grow">Aguardando atendente: ${esc(c.motivo_atendente || "")}</span>
+        <button class="btn" data-resolver="${esc(c.id)}">Marcar como resolvido</button></div>` : "";
+  $("#dcFalas").innerHTML = c.falas.map((f) => `<div class="fala f-${f.autor}">${esc(f.texto)}</div>`).join("") || `<p class="mut">Sem mensagens.</p>`;
+  $("#dlgConversa").showModal();
+}
+
+function abrirReserva(leadId) {
+  const form = $("#formReserva");
+  form.reset(); $("#drErro").textContent = "";
+  form.quarto_id.innerHTML = painel.quartos.map((q) => `<option value="${esc(q.id)}">${esc(q.nome)}</option>`).join("");
+  const l = leadId && painel.locacoes.find((x) => x.lead_id === leadId);
+  form.lead_id.value = l ? l.lead_id : "";
+  $("#drTitulo").textContent = l ? "Confirmar reserva do assistente" : "Registrar reserva";
+  if (l) { form.quarto_id.value = l.quarto_id; form.checkin.value = l.checkin; form.checkout.value = l.checkout; }
+  $("#dlgReserva").showModal();
+}
+
+$("#formReserva").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const dados = Object.fromEntries(new FormData(e.target));
+  if (!dados.lead_id) delete dados.lead_id;
+  try {
+    await api("/reservas", { method: "POST", body: JSON.stringify(dados) });
+    $("#dlgReserva").close(); await carregar();
+  } catch (err) { $("#drErro").textContent = err.message; }
+});
+
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest("[data-aba],[data-conversa],[data-confirmar],[data-resolver],[data-fechar]");
+  if (!t) return;
+  if (t.dataset.aba) {
+    document.querySelectorAll("#abas button").forEach((b) => b.classList.toggle("ativo", b === t));
+    document.querySelectorAll("section[data-sec]").forEach((s) => (s.hidden = s.dataset.sec !== t.dataset.aba));
+  } else if (t.dataset.conversa) { e.preventDefault(); abrirConversa(t.dataset.conversa).catch((err) => alert(err.message)); }
+  else if (t.dataset.confirmar) abrirReserva(t.dataset.confirmar);
+  else if (t.dataset.resolver) {
+    await api(`/conversas/${encodeURIComponent(t.dataset.resolver)}/resolver`, { method: "POST" });
+    $("#dlgConversa").close(); await carregar();
+  } else if (t.hasAttribute("data-fechar")) t.closest("dialog").close();
+});
+document.addEventListener("change", async (e) => {
+  if (e.target.dataset.status) {
+    try { await api(`/reservas/${encodeURIComponent(e.target.dataset.status)}`, { method: "PATCH", body: JSON.stringify({ status: e.target.value }) }); await carregar(); }
+    catch (err) { alert(err.message); }
+  }
+});
+$("#fAtend").onchange = desenharAtend;
+$("#fLoc").onchange = desenharLoc;
+$("#dataQuartos").onchange = () => carregarQuartos().catch((err) => alert(err.message));
+$("#novaReserva").onclick = () => abrirReserva(null);
+$("#entrar").onclick = entrar;
+$("#senha").onkeydown = (e) => e.key === "Enter" && entrar();
+$("#sair").onclick = sair;
+$("#recarregar").onclick = () => carregar().catch((err) => alert(err.message));
+
+if (senha) { $("#login").hidden = true; $("#app").hidden = false; carregar().catch(() => sair()); }
+</script>
+</body>
+</html>

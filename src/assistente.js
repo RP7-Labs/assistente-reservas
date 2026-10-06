@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
-import { criarLead, carregarConversa, salvarConversa } from "./store.js";
+import { criarLead, carregarConversa, salvarConversa, marcarAtendente } from "./store.js";
 
 const MODELO = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const MAX_RODADAS = 6;
@@ -73,6 +73,7 @@ async function executarFerramenta(nome, entrada, ctx) {
   }
   if (nome === "chamar_atendente") {
     ctx.eventos.push({ tipo: "atendente", motivo: entrada.motivo });
+    ctx.pedirAtendente = entrada.motivo;
     return { conteudo: JSON.stringify({ ok: true, aviso: "Um atendente vai continuar a conversa em breve." }) };
   }
   return { conteudo: JSON.stringify({ erro: `Ferramenta desconhecida: ${nome}` }), erro: true };
@@ -101,6 +102,7 @@ export async function responder({ conversaId, texto, canal = "web", publicUrl = 
     if (resp.stop_reason === "refusal") break;
     if (resp.stop_reason !== "tool_use") {
       await salvarConversa(conversaId, canal, historico);
+      if (ctx.pedirAtendente) await marcarAtendente(conversaId, true, ctx.pedirAtendente);
       const resposta = resp.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
       return { resposta, eventos: ctx.eventos };
     }
@@ -117,5 +119,6 @@ export async function responder({ conversaId, texto, canal = "web", publicUrl = 
   }
 
   await salvarConversa(conversaId, canal, historico);
+  await marcarAtendente(conversaId, true, ctx.pedirAtendente || "falha do assistente");
   return { resposta: "Desculpe, não consegui concluir agora. Vou chamar um atendente para te ajudar.", eventos: [...ctx.eventos, { tipo: "atendente", motivo: "falha do assistente" }] };
 }

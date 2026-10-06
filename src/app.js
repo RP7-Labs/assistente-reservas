@@ -3,6 +3,7 @@ import { responder } from "./assistente.js";
 import { carregarHotel, montarLinkMotor } from "./catalogo.js";
 import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
+import { admin } from "./admin.js";
 
 export const app = express();
 app.use(express.json());
@@ -72,5 +73,7 @@ app.get("/api/metricas", async (_req, res) => {
     res.status(500).json({ erro: "Falha ao calcular métricas" });
   }
 });
+
+app.use("/api/admin", admin);
 
 rotasWhatsapp(app);

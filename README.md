@@ -19,12 +19,19 @@ npm test               # testa a lógica de quarto/link sem chamar a IA
 ```
 
 ## Publicar (Supabase + Vercel, planos gratuitos)
-1. **Supabase**: no projeto (novo ou existente), abra o SQL Editor e rode `db/schema.sql`. Tudo fica no schema `reservas`, sem misturar com outro projeto.
+1. **Supabase**: no projeto (novo ou existente), abra o SQL Editor e rode `db/schema.sql` e depois `db/002_backoffice.sql`. Tudo fica no schema `reservas`, sem misturar com outro projeto.
 2. Em **Project Settings > API > Exposed schemas**, adicione `reservas`.
-3. **Vercel**: importe este repositório (Framework: Other) e cadastre as variáveis do `.env.example`: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `PUBLIC_URL` (a URL que a Vercel gerar).
-4. Abra a URL: o chat aparece na página inicial, as métricas ficam em `/api/metricas` e a saúde dos serviços em `/status`.
+3. **Vercel**: importe este repositório (Framework: Other) e cadastre as variáveis do `.env.example`: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_URL` (a URL que a Vercel gerar) e `ADMIN_PASSWORD` (senha do back-office).
+4. Abra a URL: o chat aparece na página inicial, as métricas ficam em `/api/metricas` a saúde dos serviços em `/status` e o back-office em `/admin`.
 
 Sem as variáveis do Supabase, o app grava em `data/local.json`, o que serve para rodar localmente.
+
+## Back-office (`/admin`)
+Protegido pela senha `ADMIN_PASSWORD`.
+- **Visão geral**: atendimentos, links gerados e clicados, reservas, conversão, receita e comissão economizada.
+- **Atendimentos**: todas as conversas, com destaque para as que pediram um atendente humano.
+- **Locações**: o funil de cada link (enviado, clicou, confirmada, concluída, cancelada). Ao confirmar na Gasystem, registre o código e o valor. Reservas de outros canais podem ser lançadas à mão.
+- **Quartos**: ocupação e quartos livres por data, com base nas reservas registradas (o número de quartos de cada tipo fica em `unidades`, no `data/hotel.json`).
 
 ## Configurar para o hotel do Joel
 Edite `data/hotel.json`: quartos reais, capacidades, preços "a partir de" e `motor.link_modelo` com o formato do link da Gasystem (abrir uma reserva no site e copiar a URL já mostra o padrão).

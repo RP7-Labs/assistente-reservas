@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {} };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [] };
   }
 }
 function gravarArquivo(db) {
@@ -76,6 +76,7 @@ export async function salvarConversa(id, canal, mensagens) {
   }
   const db = lerArquivo();
   db.conversas[id] = mensagens;
+  db.atendimentos[id] = { ...db.atendimentos[id], canal, atualizado_em: new Date().toISOString() };
   gravarArquivo(db);
 }
 
@@ -111,4 +112,73 @@ export async function verificarBanco() {
   } catch (err) {
     return { ok: false, detalhe: err.message, ms: Date.now() - inicio };
   }
+}
+
+// ---- Back-office ----
+
+export async function marcarAtendente(id, precisa, motivo = null) {
+  if (sb) {
+    verificar(await sb.from("conversas").update({ precisa_atendente: precisa, motivo_atendente: motivo }).eq("id", id));
+    return;
+  }
+  const db = lerArquivo();
+  db.atendimentos[id] = { ...db.atendimentos[id], precisa_atendente: precisa, motivo_atendente: motivo };
+  gravarArquivo(db);
+}
+
+export async function listarConversas(limite = 200) {
+  if (sb) {
+    return verificar(
+      await sb.from("conversas")
+        .select("id, canal, mensagens, atualizado_em, precisa_atendente, motivo_atendente")
+        .order("atualizado_em", { ascending: false })
+        .limit(limite),
+    );
+  }
+  const db = lerArquivo();
+  return Object.entries(db.conversas)
+    .map(([id, mensagens]) => ({ id, mensagens, canal: "web", precisa_atendente: false, motivo_atendente: null, ...db.atendimentos[id] }))
+    .sort((a, b) => String(b.atualizado_em).localeCompare(String(a.atualizado_em)))
+    .slice(0, limite);
+}
+
+export async function listarDados() {
+  if (sb) {
+    const [leads, cliques, reservas] = await Promise.all([
+      sb.from("leads").select("*").order("criado_em", { ascending: false }).limit(1000),
+      sb.from("cliques").select("lead_id, em"),
+      sb.from("reservas").select("*").order("checkin", { ascending: true }),
+    ]);
+    return { leads: verificar(leads), cliques: verificar(cliques), reservas: verificar(reservas) };
+  }
+  const { leads, cliques, reservas } = lerArquivo();
+  return { leads: [...leads].reverse(), cliques, reservas };
+}
+
+export async function salvarReserva(reserva) {
+  const linha = { ...reserva, atualizado_em: new Date().toISOString() };
+  if (sb) {
+    verificar(await sb.from("reservas").upsert(linha));
+    return linha;
+  }
+  const db = lerArquivo();
+  const i = db.reservas.findIndex((r) => r.codigo_motor === linha.codigo_motor);
+  if (i >= 0) db.reservas[i] = { ...db.reservas[i], ...linha };
+  else db.reservas.push({ criado_em: linha.atualizado_em, ...linha });
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function atualizarStatusReserva(codigo, status) {
+  if (sb) {
+    const r = verificar(await sb.from("reservas").update({ status, atualizado_em: new Date().toISOString() }).eq("codigo_motor", codigo).select());
+    return r.length > 0;
+  }
+  const db = lerArquivo();
+  const r = db.reservas.find((x) => x.codigo_motor === codigo);
+  if (!r) return false;
+  r.status = status;
+  r.atualizado_em = new Date().toISOString();
+  gravarArquivo(db);
+  return true;
 }
