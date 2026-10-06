@@ -12,7 +12,7 @@ Assistente com IA (Claude) que atende o hóspede no site e no WhatsApp e leva at
 
 ## Rodar
 ```bash
-cp .env.example .env   # preencher ANTHROPIC_API_KEY
+cp .env.example .env   # ANTHROPIC_API_KEY é opcional
 npm install
 npm start              # http://localhost:3000
 npm test               # testa a lógica de quarto/link sem chamar a IA
@@ -41,3 +41,7 @@ Edite `data/hotel.json`: quartos reais, capacidades, preços "a partir de" e `mo
 2. Publicar (Vercel/VPS) e conectar um número de WhatsApp de teste (WhatsApp Cloud API).
 3. Cruzar os leads com o relatório de reservas da Gasystem para medir conversão e comissão economizada.
 4. Pagamento embutido (PIX/cartão com split) na fase 2.
+
+## Modo sem IA (regras)
+
+Sem `ANTHROPIC_API_KEY`, o chat funciona por regras (`src/regras.js`), sem custo: entende quarto (nome e apelidos do `data/hotel.json`), datas ("10/10", "dia 12", "de 3 a 5 de janeiro", "amanhã", "sexta"), noites e pessoas ("casal", "2 adultos e 1 criança"), pergunta só o que falta e gera o mesmo link rastreável. Pedidos de atendente, eventos, grupos e reclamações vão para o back-office. Responde ainda preço, quartos e políticas. Com a chave, passa a usar o Claude; `ASSISTENTE_MODO=regras` força o modo sem IA.

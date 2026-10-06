@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
 import { criarLead, carregarConversa, salvarConversa, marcarAtendente } from "./store.js";
+import { responderPorRegras, hojeSP } from "./regras.js";
 
 const MODELO = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 const MAX_RODADAS = 6;
@@ -79,7 +80,38 @@ async function executarFerramenta(nome, entrada, ctx) {
   return { conteudo: JSON.stringify({ erro: `Ferramenta desconhecida: ${nome}` }), erro: true };
 }
 
+// Sem chave da IA (ou ASSISTENTE_MODO=regras), responde por regras, sem custo
+export const modoAssistente = () =>
+  process.env.ASSISTENTE_MODO === "regras" || !process.env.ANTHROPIC_API_KEY ? "regras" : "ia";
+
+async function responderSemIA({ conversaId, texto, canal, publicUrl }) {
+  const hotel = carregarHotel();
+  const historico = await carregarConversa(conversaId);
+  historico.push({ role: "user", content: texto });
+  const falas = historico.filter((m) => m.role === "user" && typeof m.content === "string").map((m) => m.content);
+  const r = responderPorRegras(hotel, falas, hojeSP());
+  const eventos = [];
+  let resposta = r.texto;
+  if (r.acao?.tipo === "link") {
+    const { quarto_id, ...pedido } = r.acao.pedido;
+    const quarto = hotel.quartos.find((q) => q.id === quarto_id);
+    const noites = Math.round((Date.parse(pedido.checkout) - Date.parse(pedido.checkin)) / 86_400_000);
+    const lead = await criarLead({ canal, conversa_id: conversaId, quarto_id, ...pedido, noites });
+    const link = publicUrl ? `${publicUrl}/r/${lead.id}` : montarLinkMotor(hotel, quarto, pedido, lead.id);
+    resposta = resposta.replace("{link}", link);
+    eventos.push({ tipo: "link", lead_id: lead.id, quarto: quarto.nome, link });
+  }
+  historico.push({ role: "assistant", content: [{ type: "text", text: resposta }] });
+  await salvarConversa(conversaId, canal, historico);
+  if (r.acao?.tipo === "atendente") {
+    await marcarAtendente(conversaId, true, r.acao.motivo);
+    eventos.push({ tipo: "atendente", motivo: r.acao.motivo });
+  }
+  return { resposta, eventos };
+}
+
 export async function responder({ conversaId, texto, canal = "web", publicUrl = process.env.PUBLIC_URL }) {
+  if (modoAssistente() === "regras") return responderSemIA({ conversaId, texto, canal, publicUrl });
   const hotel = carregarHotel();
   const historico = await carregarConversa(conversaId);
   historico.push({ role: "user", content: texto });

@@ -1,5 +1,5 @@
 import express from "express";
-import { responder } from "./assistente.js";
+import { responder, modoAssistente } from "./assistente.js";
 import { carregarHotel, montarLinkMotor } from "./catalogo.js";
 import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
@@ -13,6 +13,7 @@ app.get("/api/status", (_req, res) => {
   const tem = (v) => Boolean(process.env[v]);
   res.json({
     ia: tem("ANTHROPIC_API_KEY"),
+    assistente: modoAssistente(),
     banco: tem("SUPABASE_URL") && tem("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "arquivo local",
     public_url: process.env.PUBLIC_URL || null,
     whatsapp: tem("WHATSAPP_TOKEN") && tem("WHATSAPP_PHONE_NUMBER_ID"),
@@ -29,7 +30,9 @@ app.get("/api/health", async (_req, res) => {
   };
   const servicos = [
     { nome: "banco", estado: banco.ok ? "ok" : "erro", detalhe: banco.detalhe, ms: banco.ms },
-    config("ia", "ANTHROPIC_API_KEY"),
+    modoAssistente() === "regras"
+      ? { nome: "ia", estado: "pendente", detalhe: "modo sem IA (regras) ativo; o chat funciona" }
+      : config("ia", "ANTHROPIC_API_KEY"),
     config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
     config("rastreio", "PUBLIC_URL"),
   ];
@@ -39,9 +42,6 @@ app.get("/api/health", async (_req, res) => {
 app.post("/api/chat", async (req, res) => {
   const { conversaId, texto } = req.body ?? {};
   if (!conversaId || !texto) return res.status(400).json({ erro: "conversaId e texto são obrigatórios" });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(503).json({ erro: "O assistente ainda não está ativo: falta configurar a chave da IA (ANTHROPIC_API_KEY)." });
-  }
   try {
     res.json(await responder({ conversaId, texto, canal: "web" }));
   } catch (err) {
