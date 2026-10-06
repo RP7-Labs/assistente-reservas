@@ -22,7 +22,7 @@ npm test               # testa a lógica de quarto/link sem chamar a IA
 1. **Supabase**: no projeto (novo ou existente), abra o SQL Editor e rode `db/schema.sql`. Tudo fica no schema `reservas`, sem misturar com outro projeto.
 2. Em **Project Settings > API > Exposed schemas**, adicione `reservas`.
 3. **Vercel**: importe este repositório (Framework: Other) e cadastre as variáveis do `.env.example`: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `PUBLIC_URL` (a URL que a Vercel gerar).
-4. Abra a URL: o chat aparece na página inicial e as métricas ficam em `/api/metricas`.
+4. Abra a URL: o chat aparece na página inicial, as métricas ficam em `/api/metricas` e a saúde dos serviços em `/status`.
 
 Sem as variáveis do Supabase, o app grava em `data/local.json`, o que serve para rodar localmente.
 

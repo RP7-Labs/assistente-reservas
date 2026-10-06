@@ -97,3 +97,18 @@ export async function resumo() {
     por_canal: contar("canal"),
   };
 }
+
+// Consulta leve para a página de status
+export async function verificarBanco() {
+  const inicio = Date.now();
+  try {
+    if (sb) {
+      verificar(await sb.from("leads").select("id").limit(1));
+    } else {
+      lerArquivo();
+    }
+    return { ok: true, detalhe: sb ? "Supabase" : "arquivo local", ms: Date.now() - inicio };
+  } catch (err) {
+    return { ok: false, detalhe: err.message, ms: Date.now() - inicio };
+  }
+}
