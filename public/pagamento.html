@@ -22,6 +22,11 @@
   .metodos button.ativo { border:2px solid var(--pri); color:var(--pri); font-weight:600 }
   .erro { color:var(--err); font-size:14px; min-height:1em; margin:6px 0 }
   .dica { font-size:13px; color:var(--mut); margin:8px 0 0 }
+  .testes { background:var(--aviso); color:#78350f; border-radius:10px; padding:10px 12px; margin-bottom:14px; font-size:14px }
+  .testes strong { display:block; margin-bottom:6px }
+  .testes .cartao { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 }
+  .testes code { font-size:14px; font-weight:600 }
+  .testes button { width:auto; padding:4px 10px; font-size:13px; background:#fff; color:#78350f; border:1px solid #d97706; font-weight:500 }
   #qr { display:flex; justify-content:center; margin:8px 0 12px } #qr img, #qr canvas { width:200px; height:200px }
   textarea { width:100%; font:12px/1.4 ui-monospace,monospace; padding:8px; border:1px solid #d6d3d1; border-radius:10px; resize:none; color:var(--tx) }
   .ok { text-align:center } .ok .icone { font-size:40px; color:var(--ok) } code { font-size:16px; font-weight:600 }
@@ -54,6 +59,12 @@
     </div>
 
     <form id="formCartao">
+      <div class="testes">
+        <strong>Cartões de teste</strong>
+        <div class="cartao"><span><code>4111 1111 1111 1111</code> aprova</span><button type="button" data-teste="4111111111111111">Usar</button></div>
+        <div class="cartao"><span><code>4000 0000 0000 0002</code> recusa</span><button type="button" data-teste="4000000000000002">Usar</button></div>
+        <div style="margin-top:4px">Use qualquer validade futura (ex.: 12/30) e qualquer CVV (ex.: 123).</div>
+      </div>
       <label>Número do cartão <input name="numero" inputmode="numeric" autocomplete="cc-number" placeholder="0000 0000 0000 0000" required></label>
       <label>Nome impresso no cartão <input name="nome" autocomplete="cc-name" required></label>
       <div class="dupla">
@@ -63,7 +74,6 @@
       <div class="erro" id="erroCartao"></div>
       <button id="btnCartao">Pré-autorizar</button>
       <p class="dica">O valor fica reservado no limite do cartão e só é cobrado pelo hotel. Se a reserva for cancelada, o limite é liberado.</p>
-      <p class="dica">Teste: 4111 1111 1111 1111 aprova; 4000 0000 0000 0002 é recusado. Qualquer validade futura e CVV.</p>
     </form>
 
     <div id="areaPix" hidden>
@@ -140,7 +150,7 @@ async function iniciar() {
     if (pg?.status === "liberado") { $("#erroGeral").textContent = "Esta reserva foi cancelada. Fale com o hotel pelo chat."; return; }
     if (d.expirado) { $("#erroGeral").textContent = "As datas deste link já passaram. Peça um novo link no chat."; return; }
     const f = $("#passoDados");
-    if (pg?.email) { f.nome.value = pg.nome || ""; f.email.value = pg.email; }
+    if (pg?.email) { f.nome.value = pg.nome || ""; f.email.value = pg.email; $("#formCartao").nome.value = (pg.nome || "").toUpperCase(); }
     f.hidden = false;
     if (pg?.email) $("#passoPagar").hidden = false;
   } catch (err) { $("#erroGeral").textContent = err.message; }
@@ -162,6 +172,16 @@ document.querySelectorAll("[data-metodo]").forEach((b) => b.addEventListener("cl
   document.querySelectorAll("[data-metodo]").forEach((x) => x.classList.toggle("ativo", x === b));
   $("#formCartao").hidden = b.dataset.metodo !== "cartao";
   $("#areaPix").hidden = b.dataset.metodo !== "pix";
+}));
+
+// Preenche o cartão de teste escolhido
+document.querySelectorAll("[data-teste]").forEach((b) => b.addEventListener("click", () => {
+  const f = $("#formCartao");
+  f.numero.value = b.dataset.teste.replace(/(\d{4})(?=\d)/g, "$1 ");
+  if (!f.validade.value) f.validade.value = "12/30";
+  if (!f.cvv.value) f.cvv.value = "123";
+  if (!f.nome.value) f.nome.value = ($("#passoDados").nome.value || "TESTE").toUpperCase();
+  $("#erroCartao").textContent = "";
 }));
 
 // Máscaras simples
