@@ -1,0 +1,43 @@
+{
+  "nome": "Hotel Piloto",
+  "cidade": "Cidade do Hotel",
+  "checkin": "14:00",
+  "checkout": "12:00",
+  "politicas": "Café da manhã incluso. Pets não aceitos. Cancelamento grátis até 48h antes.",
+  "motor": {
+    "_comentario": "Modelo do link do motor de reservas (Gasystem). Substituir pelo formato real; {checkin}/{checkout} em AAAA-MM-DD.",
+    "link_modelo": "https://reservas.exemplo.com/hotel-piloto?quarto={codigo_motor}&checkin={checkin}&checkout={checkout}&adultos={adultos}&criancas={criancas}"
+  },
+  "quartos": [
+    {
+      "id": "estudio",
+      "nome": "Estúdio",
+      "apelidos": ["estudio", "studio", "kitnet", "quarto com cozinha"],
+      "descricao": "Estúdio com cozinha compacta, cama de casal e mesa de trabalho.",
+      "capacidade_adultos": 2,
+      "capacidade_total": 3,
+      "preco_a_partir": 280,
+      "codigo_motor": "EST"
+    },
+    {
+      "id": "suite",
+      "nome": "Suíte",
+      "apelidos": ["suite", "suíte", "quarto de casal", "casal"],
+      "descricao": "Suíte com cama queen, frigobar e ar-condicionado.",
+      "capacidade_adultos": 2,
+      "capacidade_total": 2,
+      "preco_a_partir": 220,
+      "codigo_motor": "SUI"
+    },
+    {
+      "id": "familia",
+      "nome": "Quarto Família",
+      "apelidos": ["familia", "família", "quarto triplo", "quadruplo", "quádruplo"],
+      "descricao": "Cama de casal e duas de solteiro.",
+      "capacidade_adultos": 4,
+      "capacidade_total": 4,
+      "preco_a_partir": 340,
+      "codigo_motor": "FAM"
+    }
+  ]
+}
