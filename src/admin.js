@@ -1,23 +1,29 @@
 import crypto from "node:crypto";
 import express from "express";
+import { gerarHash, conferirSenha, criarToken, lerToken, normalizarEmail, emailValido } from "./auth.js";
 import { carregarHotel } from "./catalogo.js";
-import { listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva } from "./store.js";
+import {
+  listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
+  buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
+} from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function hash(s) {
-  return crypto.createHash("sha256").update(String(s)).digest();
-}
-
-// Senha única do back-office, enviada no cabeçalho x-admin-senha
-function exigirSenha(req, res, next) {
-  const senha = process.env.ADMIN_PASSWORD;
-  if (!senha) return res.status(503).json({ erro: "Back-office desativado: defina ADMIN_PASSWORD." });
-  const enviada = req.get("x-admin-senha") ?? "";
-  if (!crypto.timingSafeEqual(hash(enviada), hash(senha))) return res.status(401).json({ erro: "Senha incorreta" });
-  next();
+// Sessão: token assinado no cabeçalho Authorization: Bearer <token>.
+// A cada requisição confere se o admin ainda está aprovado, então revogar vale na hora.
+async function exigirLogin(req, res, next) {
+  try {
+    const sessao = lerToken((req.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
+    const admin = sessao && (await buscarAdmin(sessao.id));
+    if (!admin || admin.status !== "aprovado") return res.status(401).json({ erro: "Sessão expirada. Entre novamente." });
+    req.admin = admin;
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: err.message });
+  }
 }
 
 const rota = (fn) => async (req, res) => {
@@ -30,9 +36,65 @@ const rota = (fn) => async (req, res) => {
 };
 
 export const admin = express.Router();
-admin.use(exigirSenha);
 
-admin.get("/login", (_req, res) => res.json({ ok: true }));
+const publico = (a) => ({ id: a.id, nome: a.nome, email: a.email, status: a.status });
+
+// Pedido de acesso. O e-mail em ADMIN_EMAIL é aprovado direto enquanto não houver nenhum admin aprovado.
+admin.post("/cadastro", rota(async (req, res) => {
+  const nome = String(req.body?.nome ?? "").trim();
+  const email = normalizarEmail(req.body?.email);
+  const senha = String(req.body?.senha ?? "");
+  if (!nome) return res.status(400).json({ erro: "Informe o nome." });
+  if (!emailValido(email)) return res.status(400).json({ erro: "E-mail inválido." });
+  if (senha.length < 8) return res.status(400).json({ erro: "A senha precisa ter pelo menos 8 caracteres." });
+  if (await buscarAdminPorEmail(email)) return res.status(409).json({ erro: "Este e-mail já tem cadastro." });
+
+  const primeiro = normalizarEmail(process.env.ADMIN_EMAIL);
+  const semAprovados = !(await listarAdmins()).some((a) => a.status === "aprovado");
+  const automatico = Boolean(primeiro) && email === primeiro && semAprovados;
+  const novo = await criarAdmin({
+    nome, email, senha_hash: await gerarHash(senha),
+    status: automatico ? "aprovado" : "pendente",
+    aprovado_em: automatico ? new Date().toISOString() : null,
+  });
+  res.status(201).json({ status: novo.status });
+}));
+
+admin.post("/entrar", rota(async (req, res) => {
+  const email = normalizarEmail(req.body?.email);
+  const a = await buscarAdminPorEmail(email);
+  const ok = a && (await conferirSenha(String(req.body?.senha ?? ""), a.senha_hash));
+  if (!ok) return res.status(401).json({ erro: "E-mail ou senha incorretos." });
+  if (a.status === "pendente") return res.status(403).json({ erro: "Seu acesso ainda está aguardando aprovação de um admin." });
+  if (a.status !== "aprovado") return res.status(403).json({ erro: "Seu acesso não está liberado." });
+  res.json({ token: criarToken(a.id), admin: publico(a) });
+}));
+
+admin.use(exigirLogin);
+
+admin.get("/eu", (req, res) => res.json(publico(req.admin)));
+
+admin.get("/usuarios", rota(async (_req, res) => {
+  const todos = await listarAdmins();
+  const nomes = Object.fromEntries(todos.map((a) => [a.id, a.nome]));
+  res.json(todos.map((a) => ({ ...a, aprovado_por_nome: a.aprovado_por ? nomes[a.aprovado_por] ?? null : null })));
+}));
+
+admin.post("/usuarios/:id/:acao", rota(async (req, res) => {
+  const { id, acao } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ erro: "Usuário não encontrado." });
+  const alvo = await buscarAdmin(id);
+  if (!alvo) return res.status(404).json({ erro: "Usuário não encontrado." });
+  if (acao === "aprovar") {
+    await atualizarAdmin(id, { status: "aprovado", aprovado_por: req.admin.id, aprovado_em: new Date().toISOString() });
+  } else if (acao === "recusar" || acao === "revogar") {
+    if (id === req.admin.id) return res.status(400).json({ erro: "Você não pode revogar o próprio acesso." });
+    await atualizarAdmin(id, { status: "recusado" });
+  } else {
+    return res.status(400).json({ erro: "Ação inválida." });
+  }
+  res.json({ ok: true });
+}));
 
 admin.get("/painel", rota(async (_req, res) => {
   const [conversas, dados] = await Promise.all([listarConversas(), listarDados()]);

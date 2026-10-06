@@ -42,6 +42,9 @@
   .falas { display:flex; flex-direction:column }
   form.grade { display:grid; grid-template-columns:1fr 1fr; gap:10px } form.grade label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mut) }
   form.grade .full { grid-column:1 / -1 }
+  .trocar { display:flex; gap:4px; background:var(--bg); border-radius:8px; padding:4px }
+  .trocar button { flex:1; background:transparent; color:var(--mut); border:0; padding:8px; border-radius:6px; font:inherit; cursor:pointer }
+  .trocar button.ativo { background:var(--card2); color:var(--tx) }
   #login { max-width:340px; margin:12vh auto; background:var(--card); padding:28px; border-radius:12px; display:flex; flex-direction:column; gap:12px }
   .erro { color:var(--err); font-size:14px; min-height:1em }
   .vazio { color:var(--dim); padding:20px; text-align:center; background:var(--card); border-radius:9px }
@@ -52,16 +55,23 @@
 <body>
 <div id="login">
   <h1>Back-office</h1>
-  <input id="senha" type="password" placeholder="Senha" autocomplete="current-password">
-  <button class="btn prim" id="entrar">Entrar</button>
+  <div class="trocar"><button class="ativo" data-modo="entrar">Entrar</button><button data-modo="cadastro">Pedir acesso</button></div>
+  <form id="formLogin" style="display:flex;flex-direction:column;gap:12px">
+    <input name="nome" placeholder="Seu nome" autocomplete="name" hidden>
+    <input name="email" type="email" placeholder="E-mail" autocomplete="email" required>
+    <input name="senha" type="password" placeholder="Senha" autocomplete="current-password" required minlength="8">
+    <button class="btn prim" id="btnLogin">Entrar</button>
+  </form>
   <div class="erro" id="loginErro"></div>
+  <div class="mut" id="loginInfo"></div>
 </div>
 
 <main id="app" hidden>
   <header>
     <h1>Back-office de Reservas</h1>
     <span class="mut" id="atualizado"></span>
-    <button class="btn sair" id="recarregar">Atualizar</button>
+    <span class="mut sair" id="quem"></span>
+    <button class="btn" id="recarregar">Atualizar</button>
     <button class="btn" id="sair">Sair</button>
   </header>
   <nav id="abas">
@@ -69,6 +79,7 @@
     <button data-aba="atendimentos">Atendimentos <span class="badge" id="badgeAtend" hidden></span></button>
     <button data-aba="locacoes">Locações</button>
     <button data-aba="quartos">Quartos</button>
+    <button data-aba="usuarios">Usuários <span class="badge" id="badgeUsu" hidden></span></button>
   </nav>
 
   <section data-sec="geral">
@@ -115,6 +126,13 @@
     </table></div>
     <p class="aviso">A disponibilidade considera as reservas registradas aqui. Enquanto não houver integração com a Gasystem, reservas feitas por outros canais precisam ser lançadas em "Registrar reserva".</p>
   </section>
+  <section data-sec="usuarios" hidden>
+    <div class="tabela"><table>
+      <thead><tr><th>Status</th><th>Nome</th><th>E-mail</th><th>Desde</th><th>Aprovado por</th><th></th></tr></thead>
+      <tbody id="tbUsu"></tbody>
+    </table></div>
+    <p class="aviso">Quem quiser acesso usa "Pedir acesso" na tela de entrada. O pedido aparece aqui para qualquer admin aprovar ou recusar.</p>
+  </section>
 </main>
 
 <dialog id="dlgConversa">
@@ -159,44 +177,91 @@ const STATUS = {
 };
 const tagStatus = (s) => { const [t, c] = STATUS[s] ?? [s, ""]; return `<span class="tag ${c}">${esc(t)}</span>`; };
 
-let senha = "";
-try { senha = sessionStorage.getItem("adminSenha") || ""; } catch {}
+let token = "";
+let eu = null;
+try { token = localStorage.getItem("adminToken") || ""; } catch {}
 let painel = null;
 let nomes = {};
 
 async function api(caminho, opcoes = {}) {
   const r = await fetch("/api/admin" + caminho, {
     ...opcoes,
-    headers: { "Content-Type": "application/json", "x-admin-senha": senha, ...(opcoes.headers || {}) },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(opcoes.headers || {}) },
   });
   const corpo = await r.json().catch(() => ({}));
-  if (r.status === 401) { sair(); throw new Error("Senha incorreta"); }
+  if (r.status === 401 && token) { sair(); throw new Error(corpo.erro || "Sessão expirada"); }
   if (!r.ok) throw new Error(corpo.erro || `Erro ${r.status}`);
   return corpo;
 }
 
 function sair() {
-  senha = "";
-  try { sessionStorage.removeItem("adminSenha"); } catch {}
+  token = ""; eu = null;
+  try { localStorage.removeItem("adminToken"); } catch {}
   $("#app").hidden = true; $("#login").hidden = false;
 }
 
-async function entrar() {
-  senha = $("#senha").value;
-  $("#loginErro").textContent = "";
+let modo = "entrar";
+function trocarModo(m) {
+  modo = m;
+  document.querySelectorAll(".trocar button").forEach((b) => b.classList.toggle("ativo", b.dataset.modo === m));
+  const f = $("#formLogin");
+  f.nome.hidden = m !== "cadastro"; f.nome.required = m === "cadastro";
+  f.senha.autocomplete = m === "cadastro" ? "new-password" : "current-password";
+  f.senha.placeholder = m === "cadastro" ? "Senha (mínimo 8 caracteres)" : "Senha";
+  $("#btnLogin").textContent = m === "cadastro" ? "Pedir acesso" : "Entrar";
+  $("#loginErro").textContent = ""; $("#loginInfo").textContent = "";
+}
+
+async function enviarLogin(e) {
+  e.preventDefault();
+  const dados = Object.fromEntries(new FormData(e.target));
+  $("#loginErro").textContent = ""; $("#loginInfo").textContent = "";
   try {
-    await api("/login");
-    try { sessionStorage.setItem("adminSenha", senha); } catch {}
-    $("#login").hidden = true; $("#app").hidden = false;
-    await carregar();
-  } catch (e) { $("#loginErro").textContent = e.message; }
+    if (modo === "cadastro") {
+      const r = await api("/cadastro", { method: "POST", body: JSON.stringify(dados) });
+      if (r.status !== "aprovado") {
+        $("#loginInfo").textContent = "Pedido enviado. Você poderá entrar assim que um admin aprovar.";
+        trocarModoMantendo(); return;
+      }
+    }
+    const r = await api("/entrar", { method: "POST", body: JSON.stringify({ email: dados.email, senha: dados.senha }) });
+    token = r.token; eu = r.admin;
+    try { localStorage.setItem("adminToken", token); } catch {}
+    await abrirApp();
+  } catch (err) { $("#loginErro").textContent = err.message; }
+}
+function trocarModoMantendo() { const info = $("#loginInfo").textContent; trocarModo("entrar"); $("#loginInfo").textContent = info; }
+
+async function abrirApp() {
+  if (!eu) eu = await api("/eu");
+  $("#quem").textContent = eu.nome;
+  $("#login").hidden = true; $("#app").hidden = false;
+  await carregar();
 }
 
 async function carregar() {
   painel = await api("/painel");
   nomes = Object.fromEntries(painel.quartos.map((q) => [q.id, q.nome]));
   $("#atualizado").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR");
-  desenharGeral(); desenharAtend(); desenharLoc(); await carregarQuartos();
+  desenharGeral(); desenharAtend(); desenharLoc();
+  await Promise.all([carregarQuartos(), carregarUsuarios()]);
+}
+
+async function carregarUsuarios() {
+  const lista = await api("/usuarios");
+  const pend = lista.filter((u) => u.status === "pendente").length;
+  const b = $("#badgeUsu"); b.hidden = !pend; b.textContent = pend;
+  const tag = { aprovado: ["Aprovado", "t-ok"], pendente: ["Aguardando", "t-warn"], recusado: ["Sem acesso", "t-err"] };
+  $("#tbUsu").innerHTML = lista.map((u) => {
+    const [t, c] = tag[u.status] ?? [u.status, ""];
+    let acoes = "";
+    if (u.id === eu?.id) acoes = `<span class="mut">você</span>`;
+    else if (u.status === "pendente") acoes = `<button class="btn prim" data-usuario="${esc(u.id)}" data-acao="aprovar">Aprovar</button> <button class="btn" data-usuario="${esc(u.id)}" data-acao="recusar">Recusar</button>`;
+    else if (u.status === "aprovado") acoes = `<button class="btn" data-usuario="${esc(u.id)}" data-acao="revogar">Revogar</button>`;
+    else acoes = `<button class="btn" data-usuario="${esc(u.id)}" data-acao="aprovar">Liberar</button>`;
+    return `<tr><td><span class="tag ${c}">${t}</span></td><td>${esc(u.nome)}</td><td class="mut">${esc(u.email)}</td>
+      <td class="mut">${dataBR(u.criado_em)}</td><td class="mut">${esc(u.aprovado_por_nome || (u.status === "aprovado" ? "automático" : "—"))}</td><td style="white-space:nowrap">${acoes}</td></tr>`;
+  }).join("");
 }
 
 function desenharGeral() {
@@ -304,9 +369,14 @@ $("#formReserva").addEventListener("submit", async (e) => {
 });
 
 document.addEventListener("click", async (e) => {
-  const t = e.target.closest("[data-aba],[data-conversa],[data-confirmar],[data-resolver],[data-fechar]");
+  const t = e.target.closest("[data-aba],[data-conversa],[data-confirmar],[data-resolver],[data-fechar],[data-usuario],[data-modo]");
   if (!t) return;
-  if (t.dataset.aba) {
+  if (t.dataset.modo) trocarModo(t.dataset.modo);
+  else if (t.dataset.usuario) {
+    if (t.dataset.acao === "revogar" && !confirm("Revogar o acesso deste admin?")) return;
+    try { await api(`/usuarios/${t.dataset.usuario}/${t.dataset.acao}`, { method: "POST" }); await carregarUsuarios(); }
+    catch (err) { alert(err.message); }
+  } else if (t.dataset.aba) {
     document.querySelectorAll("#abas button").forEach((b) => b.classList.toggle("ativo", b === t));
     document.querySelectorAll("section[data-sec]").forEach((s) => (s.hidden = s.dataset.sec !== t.dataset.aba));
   } else if (t.dataset.conversa) { e.preventDefault(); abrirConversa(t.dataset.conversa).catch((err) => alert(err.message)); }
@@ -326,12 +396,11 @@ $("#fAtend").onchange = desenharAtend;
 $("#fLoc").onchange = desenharLoc;
 $("#dataQuartos").onchange = () => carregarQuartos().catch((err) => alert(err.message));
 $("#novaReserva").onclick = () => abrirReserva(null);
-$("#entrar").onclick = entrar;
-$("#senha").onkeydown = (e) => e.key === "Enter" && entrar();
+$("#formLogin").addEventListener("submit", enviarLogin);
 $("#sair").onclick = sair;
 $("#recarregar").onclick = () => carregar().catch((err) => alert(err.message));
 
-if (senha) { $("#login").hidden = true; $("#app").hidden = false; carregar().catch(() => sair()); }
+if (token) abrirApp().catch(() => sair());
 </script>
 </body>
 </html>

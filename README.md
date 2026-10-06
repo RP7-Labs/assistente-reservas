@@ -19,15 +19,15 @@ npm test               # testa a lógica de quarto/link sem chamar a IA
 ```
 
 ## Publicar (Supabase + Vercel, planos gratuitos)
-1. **Supabase**: no projeto (novo ou existente), abra o SQL Editor e rode `db/schema.sql` e depois `db/002_backoffice.sql`. Tudo fica no schema `reservas`, sem misturar com outro projeto.
+1. **Supabase**: no projeto (novo ou existente), abra o SQL Editor e rode `db/schema.sql`, depois `db/002_backoffice.sql` e `db/003_admins.sql`. Tudo fica no schema `reservas`, sem misturar com outro projeto.
 2. Em **Project Settings > API > Exposed schemas**, adicione `reservas`.
-3. **Vercel**: importe este repositório (Framework: Other) e cadastre as variáveis do `.env.example`: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_URL` (a URL que a Vercel gerar) e `ADMIN_PASSWORD` (senha do back-office).
+3. **Vercel**: importe este repositório (Framework: Other) e cadastre as variáveis do `.env.example`: `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_URL` (a URL que a Vercel gerar), `ADMIN_EMAIL` (seu e-mail, o primeiro admin) e `SESSION_SECRET` (um texto aleatório longo).
 4. Abra a URL: o chat aparece na página inicial, as métricas ficam em `/api/metricas` a saúde dos serviços em `/status` e o back-office em `/admin`.
 
 Sem as variáveis do Supabase, o app grava em `data/local.json`, o que serve para rodar localmente.
 
 ## Back-office (`/admin`)
-Protegido pela senha `ADMIN_PASSWORD`.
+Cada pessoa tem seu login. Quem não tem acesso usa "Pedir acesso", e qualquer admin aprova, recusa ou revoga na aba **Usuários**. O primeiro admin é quem se cadastra com o e-mail de `ADMIN_EMAIL` (rode antes `db/003_admins.sql`).
 - **Visão geral**: atendimentos, links gerados e clicados, reservas, conversão, receita e comissão economizada.
 - **Atendimentos**: todas as conversas, com destaque para as que pediram um atendente humano.
 - **Locações**: o funil de cada link (enviado, clicou, confirmada, concluída, cancelada). Ao confirmar na Gasystem, registre o código e o valor. Reservas de outros canais podem ser lançadas à mão.

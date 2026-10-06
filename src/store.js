@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [] };
   }
 }
 function gravarArquivo(db) {
@@ -181,4 +181,45 @@ export async function atualizarStatusReserva(codigo, status) {
   r.atualizado_em = new Date().toISOString();
   gravarArquivo(db);
   return true;
+}
+
+// ---- Usuários do back-office ----
+
+export async function buscarAdminPorEmail(email) {
+  if (sb) return verificar(await sb.from("admins").select("*").eq("email", email).maybeSingle());
+  return lerArquivo().admins.find((a) => a.email === email) ?? null;
+}
+
+export async function buscarAdmin(id) {
+  if (sb) return verificar(await sb.from("admins").select("*").eq("id", id).maybeSingle());
+  return lerArquivo().admins.find((a) => a.id === id) ?? null;
+}
+
+export async function listarAdmins() {
+  const campos = "id, nome, email, status, aprovado_por, aprovado_em, criado_em";
+  if (sb) return verificar(await sb.from("admins").select(campos).order("criado_em", { ascending: true }));
+  return lerArquivo().admins.map(({ senha_hash, ...a }) => a);
+}
+
+export async function criarAdmin(dados) {
+  const admin = { id: crypto.randomUUID(), criado_em: new Date().toISOString(), aprovado_por: null, aprovado_em: null, ...dados };
+  if (sb) {
+    verificar(await sb.from("admins").insert(admin));
+    return admin;
+  }
+  const db = lerArquivo();
+  db.admins.push(admin);
+  gravarArquivo(db);
+  return admin;
+}
+
+export async function atualizarAdmin(id, campos) {
+  if (sb) {
+    verificar(await sb.from("admins").update(campos).eq("id", id));
+    return;
+  }
+  const db = lerArquivo();
+  const a = db.admins.find((x) => x.id === id);
+  if (a) Object.assign(a, campos);
+  gravarArquivo(db);
 }
