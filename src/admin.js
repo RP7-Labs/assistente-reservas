@@ -11,13 +11,18 @@ import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// A conta do ADMIN_EMAIL é a principal: sempre aprovada e nunca pode ser desativada
+const principal = () => normalizarEmail(process.env.ADMIN_EMAIL);
+const ehPrincipal = (a) => Boolean(principal()) && a?.email === principal();
+const aprovado = (a) => a?.status === "aprovado" || ehPrincipal(a);
+
 // Sessão: token assinado no cabeçalho Authorization: Bearer <token>.
 // A cada requisição confere se o admin ainda está aprovado, então revogar vale na hora.
 async function exigirLogin(req, res, next) {
   try {
     const sessao = lerToken((req.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
     const admin = sessao && (await buscarAdmin(sessao.id));
-    if (!admin || admin.status !== "aprovado") return res.status(401).json({ erro: "Sessão expirada. Entre novamente." });
+    if (!admin || !aprovado(admin)) return res.status(401).json({ erro: "Sessão expirada. Entre novamente." });
     req.admin = admin;
     next();
   } catch (err) {
@@ -37,9 +42,9 @@ const rota = (fn) => async (req, res) => {
 
 export const admin = express.Router();
 
-const publico = (a) => ({ id: a.id, nome: a.nome, email: a.email, status: a.status });
+const publico = (a) => ({ id: a.id, nome: a.nome, email: a.email, status: aprovado(a) ? "aprovado" : a.status, principal: ehPrincipal(a) });
 
-// Pedido de acesso. O e-mail em ADMIN_EMAIL é aprovado direto enquanto não houver nenhum admin aprovado.
+// Pedido de acesso. O e-mail em ADMIN_EMAIL é aprovado direto.
 admin.post("/cadastro", rota(async (req, res) => {
   const nome = String(req.body?.nome ?? "").trim();
   const email = normalizarEmail(req.body?.email);
@@ -49,9 +54,7 @@ admin.post("/cadastro", rota(async (req, res) => {
   if (senha.length < 8) return res.status(400).json({ erro: "A senha precisa ter pelo menos 8 caracteres." });
   if (await buscarAdminPorEmail(email)) return res.status(409).json({ erro: "Este e-mail já tem cadastro." });
 
-  const primeiro = normalizarEmail(process.env.ADMIN_EMAIL);
-  const semAprovados = !(await listarAdmins()).some((a) => a.status === "aprovado");
-  const automatico = Boolean(primeiro) && email === primeiro && semAprovados;
+  const automatico = ehPrincipal({ email });
   const novo = await criarAdmin({
     nome, email, senha_hash: await gerarHash(senha),
     status: automatico ? "aprovado" : "pendente",
@@ -65,8 +68,8 @@ admin.post("/entrar", rota(async (req, res) => {
   const a = await buscarAdminPorEmail(email);
   const ok = a && (await conferirSenha(String(req.body?.senha ?? ""), a.senha_hash));
   if (!ok) return res.status(401).json({ erro: "E-mail ou senha incorretos." });
-  if (a.status === "pendente") return res.status(403).json({ erro: "Seu acesso ainda está aguardando aprovação de um admin." });
-  if (a.status !== "aprovado") return res.status(403).json({ erro: "Seu acesso não está liberado." });
+  if (!aprovado(a) && a.status === "pendente") return res.status(403).json({ erro: "Seu acesso ainda está aguardando aprovação de um admin." });
+  if (!aprovado(a)) return res.status(403).json({ erro: "Seu acesso não está liberado." });
   res.json({ token: criarToken(a.id), admin: publico(a) });
 }));
 
@@ -77,7 +80,7 @@ admin.get("/eu", (req, res) => res.json(publico(req.admin)));
 admin.get("/usuarios", rota(async (_req, res) => {
   const todos = await listarAdmins();
   const nomes = Object.fromEntries(todos.map((a) => [a.id, a.nome]));
-  res.json(todos.map((a) => ({ ...a, aprovado_por_nome: a.aprovado_por ? nomes[a.aprovado_por] ?? null : null })));
+  res.json(todos.map((a) => ({ ...a, ...publico(a), aprovado_por_nome: a.aprovado_por ? nomes[a.aprovado_por] ?? null : null })));
 }));
 
 admin.post("/usuarios/:id/:acao", rota(async (req, res) => {
@@ -88,6 +91,7 @@ admin.post("/usuarios/:id/:acao", rota(async (req, res) => {
   if (acao === "aprovar") {
     await atualizarAdmin(id, { status: "aprovado", aprovado_por: req.admin.id, aprovado_em: new Date().toISOString() });
   } else if (acao === "recusar" || acao === "revogar") {
+    if (ehPrincipal(alvo)) return res.status(403).json({ erro: "O admin principal não pode ser desativado." });
     if (id === req.admin.id) return res.status(400).json({ erro: "Você não pode revogar o próprio acesso." });
     await atualizarAdmin(id, { status: "recusado" });
   } else {

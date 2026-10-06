@@ -255,7 +255,8 @@ async function carregarUsuarios() {
   $("#tbUsu").innerHTML = lista.map((u) => {
     const [t, c] = tag[u.status] ?? [u.status, ""];
     let acoes = "";
-    if (u.id === eu?.id) acoes = `<span class="mut">você</span>`;
+    if (u.principal) acoes = `<span class="tag t-info">principal</span>${u.id === eu?.id ? ' <span class="mut">você</span>' : ""}`;
+    else if (u.id === eu?.id) acoes = `<span class="mut">você</span>`;
     else if (u.status === "pendente") acoes = `<button class="btn prim" data-usuario="${esc(u.id)}" data-acao="aprovar">Aprovar</button> <button class="btn" data-usuario="${esc(u.id)}" data-acao="recusar">Recusar</button>`;
     else if (u.status === "aprovado") acoes = `<button class="btn" data-usuario="${esc(u.id)}" data-acao="revogar">Revogar</button>`;
     else acoes = `<button class="btn" data-usuario="${esc(u.id)}" data-acao="aprovar">Liberar</button>`;

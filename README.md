@@ -27,7 +27,7 @@ npm test               # testa a lógica de quarto/link sem chamar a IA
 Sem as variáveis do Supabase, o app grava em `data/local.json`, o que serve para rodar localmente.
 
 ## Back-office (`/admin`)
-Cada pessoa tem seu login. Quem não tem acesso usa "Pedir acesso", e qualquer admin aprova, recusa ou revoga na aba **Usuários**. O primeiro admin é quem se cadastra com o e-mail de `ADMIN_EMAIL` (rode antes `db/003_admins.sql`).
+Cada pessoa tem seu login. Quem não tem acesso usa "Pedir acesso", e qualquer admin aprova, recusa ou revoga na aba **Usuários**. O admin principal é quem se cadastra com o e-mail de `ADMIN_EMAIL`: entra aprovado e não pode ser recusado nem revogado (rode antes `db/003_admins.sql`).
 - **Visão geral**: atendimentos, links gerados e clicados, reservas, conversão, receita e comissão economizada.
 - **Atendimentos**: todas as conversas, com destaque para as que pediram um atendente humano.
 - **Locações**: o funil de cada link (enviado, clicou, confirmada, concluída, cancelada). Ao confirmar na Gasystem, registre o código e o valor. Reservas de outros canais podem ser lançadas à mão.
