@@ -47,6 +47,12 @@ app.get("/api/health", async (_req, res) => {
   res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
 });
 
+// Dados públicos do hotel para o chat (nome no topo)
+app.get("/api/hotel", (_req, res) => {
+  const h = carregarHotel();
+  res.json({ nome: h.nome, cidade: h.cidade });
+});
+
 app.post("/api/chat", async (req, res) => {
   const { conversaId, texto } = req.body ?? {};
   if (!conversaId || !texto) return res.status(400).json({ erro: "conversaId e texto são obrigatórios" });

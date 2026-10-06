@@ -1,0 +1,69 @@
+/* Visual compartilhado: chat, pagamento, back-office e status.
+   Tokens em :root; o tema escuro segue o sistema do usuário. */
+:root {
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e4e7ec; --border-strong: #d0d5dd;
+  --ink: #101828; --ink-2: #344054; --muted: #667085; --faint: #98a2b3;
+  --brand: #0e7c66; --brand-600: #0b6a57; --brand-50: #e7f5f1; --brand-ink: #ffffff;
+  --accent: #f59e0b; --accent-50: #fff7e6;
+  --ok: #067647; --ok-50: #e7f8ee; --warn: #b54708; --warn-50: #fff4e5; --err: #c4320a; --err-50: #fef0ec; --info: #175cd3; --info-50: #eaf2ff;
+  --radius: 14px; --radius-sm: 10px; --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+  --shadow-lg: 0 12px 32px -8px rgba(16,24,40,.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220; --surface: #121a2b; --surface-2: #1a2438; --border: #243049; --border-strong: #31405e;
+    --ink: #eef2f7; --ink-2: #c9d2de; --muted: #94a3b8; --faint: #64748b;
+    --brand: #2bb596; --brand-600: #23a083; --brand-50: #0f2e29; --brand-ink: #04211b;
+    --accent: #fbbf24; --accent-50: #2b220d;
+    --ok: #4ade80; --ok-50: #0f2a1b; --warn: #fbbf24; --warn-50: #2b220d; --err: #f87171; --err-50: #2d1414; --info: #7cb3ff; --info-50: #13233f;
+    --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-lg: 0 16px 40px -10px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { margin: 0 }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased }
+a { color: var(--brand) }
+h1, h2, h3 { margin: 0; letter-spacing: -.01em }
+.mut { color: var(--muted); font-size: 13px }
+.mono { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted) }
+.erro { color: var(--err); font-size: 14px; min-height: 1em }
+
+/* Botões */
+.btn, button.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--border-strong);
+  padding: 8px 14px; border-radius: var(--radius-sm); font: 600 14px/1.2 var(--font); cursor: pointer;
+  transition: background .15s, border-color .15s, transform .05s; text-decoration: none; white-space: nowrap;
+}
+.btn:hover { background: var(--surface-2) }
+.btn:active { transform: translateY(1px) }
+.btn.prim { background: var(--brand); color: var(--brand-ink); border-color: transparent }
+.btn.prim:hover { background: var(--brand-600) }
+.btn.grande { padding: 13px 18px; font-size: 15px; width: 100% }
+.btn:disabled { opacity: .55; cursor: default }
+.btn svg { width: 16px; height: 16px }
+
+/* Campos */
+input, select, textarea {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 12px; font: 15px var(--font); transition: border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent) }
+label { font-size: 13px; color: var(--ink-2); font-weight: 600 }
+
+/* Etiquetas de status */
+.tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); white-space: nowrap }
+.tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .8 }
+.t-ok { background: var(--ok-50); color: var(--ok) } .t-warn { background: var(--warn-50); color: var(--warn) }
+.t-err { background: var(--err-50); color: var(--err) } .t-info { background: var(--info-50); color: var(--info) }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow) }
+.marca { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em }
+.marca .logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, var(--brand), #13a487) }
+.marca .logo svg { width: 18px; height: 18px }

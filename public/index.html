@@ -1,81 +1,183 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assistente de Reservas</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reservas · Atendimento</title>
+<meta name="theme-color" content="#0e7c66">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilo.css">
 <style>
-  :root { --bg:#f5f5f4; --card:#fff; --tx:#1c1917; --mut:#78716c; --me:#0f766e; --bot:#e7e5e4; }
-  * { box-sizing:border-box } body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--tx) }
-  main { max-width:520px; margin:0 auto; height:100dvh; display:flex; flex-direction:column; padding:16px }
-  h1 { font-size:17px; margin:0 0 8px } #log { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:8px 0 }
-  .m { max-width:85%; padding:8px 12px; border-radius:14px; white-space:pre-wrap; word-break:break-word }
-  .eu { align-self:flex-end; background:var(--me); color:#fff } .bot { align-self:flex-start; background:var(--bot) }
-  .ev { align-self:center; font-size:12px; color:var(--mut) } a { color:inherit }
-  form { display:flex; gap:8px } input { flex:1; padding:10px 12px; border:1px solid #d6d3d1; border-radius:10px; font:inherit }
-  button { padding:10px 16px; border:0; border-radius:10px; background:var(--me); color:#fff; font:inherit; cursor:pointer }
-  .opcoes { align-self:flex-start; display:flex; flex-wrap:wrap; gap:6px; max-width:85% }
-  .opcoes button { background:#fff; color:var(--me); border:1px solid var(--me); padding:6px 12px; border-radius:999px; font-size:14px }
-  a.cta { align-self:flex-start; background:var(--me); color:#fff; text-decoration:none; padding:10px 18px; border-radius:10px; font-weight:600 }
-  .opcoes .data { display:flex; gap:6px; align-items:center } .opcoes input[type=date] { flex:none; padding:5px 8px; border-radius:999px; border:1px solid var(--me); font-size:14px }
+  body { min-height: 100dvh; display: grid; place-items: center;
+    background: radial-gradient(1200px 600px at 10% -10%, var(--brand-50), transparent 60%), radial-gradient(900px 500px at 110% 110%, var(--accent-50), transparent 60%), var(--bg) }
+  .chat { width: min(460px, 100%); height: min(760px, 100dvh); display: flex; flex-direction: column; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow-lg) }
+  @media (max-width: 520px) { .chat { height: 100dvh; border-radius: 0; border: 0 } }
+
+  .topo { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, var(--brand), #13a487); color: #fff }
+  .topo .avatar { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center; position: relative; flex: none }
+  .topo .avatar svg { width: 22px; height: 22px }
+  .topo .avatar::after { content: ""; position: absolute; right: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 50%; background: #4ade80; border: 2px solid #0e7c66 }
+  .topo strong { display: block; font-size: 16px; font-weight: 700 }
+  .topo span { font-size: 12.5px; opacity: .85 }
+  .topo .reiniciar { margin-left: auto; background: rgba(255,255,255,.16); border: 0; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: grid; place-items: center }
+  .topo .reiniciar:hover { background: rgba(255,255,255,.26) } .topo .reiniciar svg { width: 18px; height: 18px }
+
+  #log { flex: 1; overflow-y: auto; padding: 18px 14px 8px; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; background: var(--bg) }
+  .dia { align-self: center; font-size: 11.5px; color: var(--faint); background: var(--surface); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; margin-bottom: 6px }
+  .linha { display: flex; gap: 8px; align-items: flex-end; animation: entra .22s ease-out }
+  .linha.eu { justify-content: flex-end }
+  .linha .mini { width: 28px; height: 28px; border-radius: 50%; background: var(--brand-50); color: var(--brand); display: grid; place-items: center; flex: none }
+  .linha .mini svg { width: 15px; height: 15px }
+  .linha.seguida .mini { visibility: hidden }
+  .balao { max-width: 80%; padding: 10px 14px; border-radius: 18px; white-space: pre-wrap; word-break: break-word; font-size: 14.5px; line-height: 1.45 }
+  .bot .balao { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 6px; box-shadow: var(--shadow) }
+  .eu .balao { background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 6px }
+  .balao a { color: inherit; font-weight: 600 }
+  .hora { font-size: 10.5px; color: var(--faint); margin: 0 4px 2px }
+  .aviso-ev { align-self: center; font-size: 12px; color: var(--muted); background: var(--surface-2); padding: 4px 12px; border-radius: 999px; margin: 4px 0 }
+  @keyframes entra { from { opacity: 0; transform: translateY(6px) } }
+
+  .digitando .balao { display: inline-flex; gap: 4px; padding: 14px 16px }
+  .digitando i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); animation: pula 1.2s infinite }
+  .digitando i:nth-child(2) { animation-delay: .15s } .digitando i:nth-child(3) { animation-delay: .3s }
+  @keyframes pula { 0%, 60%, 100% { transform: translateY(0); opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
+
+  /* Card de pagamento */
+  .reserva { margin: 6px 0 6px 36px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); max-width: 80%; animation: entra .22s ease-out }
+  .reserva .rotulo { font-size: 11.5px; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: .06em }
+  .reserva strong { display: block; font-size: 16px; margin: 2px 0 10px }
+
+  /* Respostas rápidas */
+  .opcoes { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 4px; background: var(--bg); border-top: 1px solid var(--border) }
+  .opcoes:empty { display: none }
+  .chip { border: 1px solid color-mix(in srgb, var(--brand) 45%, var(--border)); background: var(--surface); color: var(--brand);
+    padding: 8px 14px; border-radius: 999px; font: 600 13.5px var(--font); cursor: pointer; transition: background .15s, transform .05s;
+    display: inline-flex; align-items: center; gap: 8px; animation: entra .2s ease-out both }
+  .chip:hover { background: var(--brand-50) } .chip:active { transform: scale(.97) }
+  .chip small { font-weight: 700; color: var(--ink-2); background: var(--surface-2); padding: 1px 7px; border-radius: 999px; font-size: 12px }
+  .chip svg { width: 15px; height: 15px }
+  .chip.data input { border: 0; padding: 0; background: transparent; color: var(--ink); font: 600 13.5px var(--font) }
+
+  form.envio { display: flex; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--border) }
+  form.envio input { flex: 1; border-radius: 999px; padding: 11px 16px; background: var(--surface-2); border-color: transparent }
+  form.envio button { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; cursor: pointer; flex: none }
+  form.envio button:hover { background: var(--brand-600) } form.envio button svg { width: 20px; height: 20px }
 </style>
 </head>
 <body>
-<main>
-  <h1>Assistente de Reservas</h1>
-  <div id="log"></div>
-  <form id="f"><input id="t" autocomplete="off" placeholder="Escolha uma opção ou digite"><button>Enviar</button></form>
-</main>
+<section class="chat">
+  <header class="topo">
+    <div class="avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></div>
+    <div><strong id="hotelNome">Reservas</strong><span>Online · responde na hora</span></div>
+    <button class="reiniciar" id="reiniciar" title="Começar de novo" aria-label="Começar de novo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+  </header>
+  <div id="log" aria-live="polite"><div class="dia">Hoje</div></div>
+  <div class="opcoes" id="opcoes"></div>
+  <form class="envio" id="f">
+    <input id="t" autocomplete="off" placeholder="Escolha uma opção ou escreva aqui" aria-label="Mensagem">
+    <button aria-label="Enviar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
+  </form>
+</section>
 <script>
-const id = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now());
-const log = document.getElementById("log"), t = document.getElementById("t");
-function add(cls, txt) {
-  const d = document.createElement("div"); d.className = "m " + cls;
-  d.innerHTML = txt.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))
-                   .replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-  log.appendChild(d); log.scrollTop = log.scrollHeight;
+const ICONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>';
+const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>';
+const MENU = [["Fazer uma reserva"], ["Ver quartos e preços"], ["Dúvidas sobre o hotel"], ["Falar com atendente"]].map(([r]) => ({ rotulo: r, texto: r }));
+let id = novoId();
+const log = document.getElementById("log"), t = document.getElementById("t"), caixa = document.getElementById("opcoes");
+let ultimoAutor = null;
+
+function novoId() { return (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()); }
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const agora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const rolar = () => { log.scrollTop = log.scrollHeight; };
+
+function add(autor, txt) {
+  const l = document.createElement("div");
+  l.className = `linha ${autor}${ultimoAutor === autor ? " seguida" : ""}`;
+  const html = esc(txt).replace(/(https?:\/\/\S+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  l.innerHTML = autor === "bot"
+    ? `<div class="mini">${ICONE}</div><div class="balao">${html}</div><span class="hora">${agora()}</span>`
+    : `<span class="hora">${agora()}</span><div class="balao">${html}</div>`;
+  log.appendChild(l); ultimoAutor = autor; rolar();
 }
-// Botões de resposta rápida: o hóspede escolhe em vez de digitar
-function addOpcoes(opcoes) {
-  const d = document.createElement("div"); d.className = "opcoes";
-  for (const o of opcoes) {
-    const b = document.createElement("button"); b.type = "button"; b.textContent = o.rotulo;
+function aviso(txt) { const d = document.createElement("div"); d.className = "aviso-ev"; d.textContent = txt; log.appendChild(d); ultimoAutor = null; rolar(); }
+function digitando(on) {
+  document.querySelector(".digitando")?.remove();
+  if (!on) return;
+  const l = document.createElement("div"); l.className = "linha bot digitando";
+  l.innerHTML = `<div class="mini">${ICONE}</div><div class="balao"><i></i><i></i><i></i></div>`;
+  log.appendChild(l); rolar();
+}
+function cardReserva(ev) {
+  const d = document.createElement("div"); d.className = "reserva";
+  d.innerHTML = `<div class="rotulo">Reserva pronta</div><strong>${esc(ev.quarto)}</strong>
+    <a class="btn prim grande" href="${esc(ev.link)}" target="_blank" rel="noopener">Pagar e confirmar</a>`;
+  log.appendChild(d); ultimoAutor = null; rolar();
+}
+
+// Respostas rápidas: o hóspede toca em vez de digitar
+function mostrarOpcoes(opcoes) {
+  caixa.innerHTML = "";
+  opcoes.forEach((o, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.style.animationDelay = `${i * 30}ms`;
+    const [nome, preco] = o.rotulo.split(" · ");
+    b.innerHTML = o.tipo === "data" ? `${CAL}${esc(o.rotulo)}` : `${esc(nome)}${preco ? ` <small>${esc(preco)}</small>` : ""}`;
     if (o.tipo === "data") {
-      // Seletor de data: abre o calendário e envia a data escolhida
       b.onclick = () => {
-        const box = document.createElement("span"); box.className = "data";
+        // Seletor de data: abre o calendário e envia a data escolhida
         const inp = document.createElement("input"); inp.type = "date"; if (o.min) inp.min = o.min;
-        inp.onchange = () => { if (!inp.value) return; const br = inp.value.split("-").reverse().join("/"); d.remove(); enviar(br, br); };
-        box.appendChild(inp); b.replaceWith(box); inp.showPicker?.(); inp.focus();
+        b.classList.add("data"); b.innerHTML = CAL; b.appendChild(inp); b.onclick = null;
+        inp.onchange = () => { if (!inp.value) return; const br = inp.value.split("-").reverse().join("/"); enviar(br, br); };
+        inp.showPicker?.(); inp.focus();
       };
-    } else b.onclick = () => { d.remove(); enviar(o.texto, o.rotulo); };
-    d.appendChild(b);
-  }
-  log.appendChild(d); log.scrollTop = log.scrollHeight;
+    } else b.onclick = () => enviar(o.texto, nome);
+    caixa.appendChild(b);
+  });
 }
+
+async function enviar(texto, mostrar) {
+  caixa.innerHTML = "";
+  add("eu", mostrar);
+  digitando(true);
+  try {
+    const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversaId: id, texto }) });
+    const j = await r.json();
+    await new Promise((ok) => setTimeout(ok, 350));
+    digitando(false);
+    const links = (j.eventos || []).filter((e) => e.tipo === "link");
+    let resposta = j.resposta || j.erro || "Desculpe, algo deu errado.";
+    // O link vira um botão; tira a URL do texto
+    for (const ev of links) {
+      resposta = resposta.split(ev.link).join("").trim()
+        .replace(/(Para garantir, finalize por este link|Reserve por este link):?$/i, "Para garantir, é só tocar no botão abaixo.");
+    }
+    add("bot", resposta);
+    links.forEach(cardReserva);
+    if ((j.eventos || []).some((e) => e.tipo === "atendente")) aviso("Um atendente foi chamado e vai responder por aqui");
+    mostrarOpcoes(j.opcoes || []);
+  } catch {
+    digitando(false);
+    add("bot", "Não consegui me conectar. Verifique sua internet e tente de novo.");
+  }
+}
+
 document.getElementById("f").onsubmit = (e) => {
   e.preventDefault(); const texto = t.value.trim(); if (!texto) return;
   t.value = ""; enviar(texto, texto);
 };
-async function enviar(texto, mostrar) {
-  document.querySelectorAll(".opcoes").forEach((x) => x.remove());
-  add("eu", mostrar);
-  try {
-    const r = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ conversaId:id, texto }) });
-    const j = await r.json();
-    add("bot", j.resposta || j.erro || "Erro");
-    for (const ev of j.eventos || []) {
-      if (ev.tipo === "link") {
-        // Botão direto para o pagamento
-        const a = document.createElement("a"); a.className = "cta"; a.href = ev.link; a.target = "_blank"; a.rel = "noopener";
-        a.textContent = `Pagar e confirmar · ${ev.quarto}`; log.appendChild(a);
-      } else add("ev", `encaminhado ao atendente`);
-    }
-    if (j.opcoes?.length) addOpcoes(j.opcoes);
-  } catch { add("bot", "Falha de conexão."); }
+function iniciar() {
+  log.innerHTML = '<div class="dia">Hoje</div>'; ultimoAutor = null;
+  add("bot", "Olá! Sou o assistente virtual do hotel. Posso te ajudar a reservar ou tirar dúvidas. Como posso ajudar?");
+  mostrarOpcoes(MENU);
 }
-add("bot", "Olá! Sou o assistente virtual do hotel. Como posso ajudar?");
-addOpcoes([{ rotulo: "Fazer uma reserva", texto: "Fazer uma reserva" }, { rotulo: "Ver quartos e preços", texto: "Ver quartos e preços" },
-  { rotulo: "Dúvidas sobre o hotel", texto: "Dúvidas sobre o hotel" }, { rotulo: "Falar com atendente", texto: "Falar com atendente" }]);
+document.getElementById("reiniciar").onclick = () => { id = novoId(); iniciar(); };
+fetch("/api/hotel").then((r) => r.ok && r.json()).then((h) => {
+  if (!h?.nome) return;
+  document.getElementById("hotelNome").textContent = h.nome;
+  document.title = `${h.nome} · Atendimento`;
+}).catch(() => {});
+iniciar();
 </script>
 </body>
 </html>

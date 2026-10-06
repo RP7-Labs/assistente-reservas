@@ -3,85 +3,141 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Back-office de Reservas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilo.css">
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --card2:#273449; --tx:#e2e8f0; --mut:#94a3b8; --dim:#64748b;
-          --ok:#4ade80; --warn:#facc15; --err:#f87171; --info:#60a5fa; --acc:#2dd4bf; }
-  * { box-sizing:border-box } [hidden] { display:none !important }
-  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.45 system-ui,-apple-system,sans-serif }
-  main { max-width:1100px; margin:0 auto; padding:28px 16px 60px }
-  h1 { font-size:24px; margin:0 } h2 { font-size:13px; letter-spacing:.08em; color:var(--dim); text-transform:uppercase; margin:28px 0 10px }
-  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px }
-  header .sair { margin-left:auto }
-  nav { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px }
-  nav button { background:var(--card); color:var(--mut); border:0; padding:9px 14px; border-radius:8px; font:inherit; cursor:pointer }
-  nav button.ativo { background:var(--acc); color:#042f2e; font-weight:600 }
-  nav .badge { background:var(--err); color:#fff; border-radius:10px; padding:0 7px; font-size:12px; margin-left:4px }
-  button.btn, .btn { background:var(--card2); color:var(--tx); border:1px solid #334155; padding:7px 12px; border-radius:7px; font:inherit; font-size:14px; cursor:pointer }
-  .btn.prim { background:var(--acc); color:#042f2e; border:0; font-weight:600 }
-  input, select { background:var(--bg); color:var(--tx); border:1px solid #334155; border-radius:7px; padding:8px 10px; font:inherit; font-size:14px }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px }
-  .kpi { background:var(--card); border-radius:10px; padding:14px 16px }
-  .kpi .v { font-size:26px; font-weight:700 } .kpi .l { color:var(--mut); font-size:13px }
-  .lista .item { background:var(--card); border-radius:9px; padding:13px 16px; margin-bottom:8px; display:flex; gap:14px; align-items:center; flex-wrap:wrap }
-  .lista .item.clicavel { cursor:pointer } .lista .item.clicavel:hover { background:var(--card2) }
-  .grow { flex:1; min-width:200px } .mut { color:var(--mut); font-size:13px } .mono { font:13px ui-monospace,monospace; color:var(--dim) }
-  .tag { font-size:12px; padding:2px 8px; border-radius:20px; background:var(--card2); color:var(--mut); white-space:nowrap }
-  .t-ok { background:#14532d; color:var(--ok) } .t-warn { background:#422006; color:var(--warn) } .t-err { background:#450a0a; color:var(--err) } .t-info { background:#172554; color:var(--info) }
-  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:10px; overflow:hidden }
-  th, td { text-align:left; padding:11px 12px; border-bottom:1px solid #334155; font-size:14px; vertical-align:middle }
-  th { color:var(--dim); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em }
-  tr:last-child td { border-bottom:0 }
-  .tabela { overflow-x:auto }
-  .barra { height:8px; background:var(--card2); border-radius:4px; overflow:hidden; min-width:120px }
-  .barra span { display:block; height:100% }
-  .filtros { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
-  dialog { background:var(--card); color:var(--tx); border:1px solid #334155; border-radius:12px; width:min(640px, calc(100vw - 32px)); max-height:85vh; padding:20px }
-  dialog::backdrop { background:rgba(0,0,0,.6) }
-  .fala { padding:8px 12px; border-radius:12px; margin:6px 0; max-width:85%; white-space:pre-wrap; word-break:break-word }
-  .f-hospede { background:#0f766e; margin-left:auto } .f-assistente { background:var(--card2) } .f-sistema { background:transparent; color:var(--mut); font-size:13px; text-align:center; max-width:100% }
-  .falas { display:flex; flex-direction:column }
-  form.grade { display:grid; grid-template-columns:1fr 1fr; gap:10px } form.grade label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mut) }
-  form.grade .full { grid-column:1 / -1 }
-  .trocar { display:flex; gap:4px; background:var(--bg); border-radius:8px; padding:4px }
-  .trocar button { flex:1; background:transparent; color:var(--mut); border:0; padding:8px; border-radius:6px; font:inherit; cursor:pointer }
-  .trocar button.ativo { background:var(--card2); color:var(--tx) }
-  #login { max-width:340px; margin:12vh auto; background:var(--card); padding:28px; border-radius:12px; display:flex; flex-direction:column; gap:12px }
-  .erro { color:var(--err); font-size:14px; min-height:1em }
-  .vazio { color:var(--dim); padding:20px; text-align:center; background:var(--card); border-radius:9px }
-  .aviso { color:var(--mut); font-size:13px; margin-top:8px }
-  @media (max-width:600px) { form.grade { grid-template-columns:1fr } .kpi .v { font-size:22px } }
+  /* Estrutura: barra lateral + conteúdo */
+  #app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh }
+  aside { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 14px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 0; height: 100vh }
+  aside .marca { padding: 0 8px; font-size: 16px }
+  #abas { display: flex; flex-direction: column; gap: 2px }
+  #abas button { display: flex; align-items: center; gap: 11px; background: transparent; border: 0; color: var(--ink-2); padding: 10px 12px; border-radius: 10px;
+    font: 600 14px var(--font); cursor: pointer; text-align: left; transition: background .15s }
+  #abas button svg { width: 18px; height: 18px; color: var(--muted); flex: none }
+  #abas button:hover { background: var(--surface-2) }
+  #abas button.ativo { background: var(--brand-50); color: var(--brand) } #abas button.ativo svg { color: var(--brand) }
+  .badge { margin-left: auto; background: var(--err); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11.5px; line-height: 19px; font-weight: 700 }
+  aside .usuario { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid var(--border) }
+  aside .usuario .ini { width: 34px; height: 34px; border-radius: 50%; background: var(--brand-50); color: var(--brand); display: grid; place-items: center; font-weight: 800; flex: none }
+  aside .usuario div { min-width: 0 } aside .usuario strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  aside .usuario button { margin-left: auto; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px; border-radius: 8px }
+  aside .usuario button:hover { background: var(--surface-2); color: var(--ink) } aside .usuario svg { width: 18px; height: 18px }
+
+  .conteudo { padding: 28px 32px 60px; min-width: 0; max-width: 1240px }
+  .barra-topo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px }
+  .barra-topo h1 { font-size: 24px; font-weight: 800 }
+  .barra-topo .acoes { margin-left: auto; display: flex; align-items: center; gap: 10px }
+  h2 { font-size: 15px; font-weight: 700; color: var(--ink); margin: 28px 0 12px; display: flex; align-items: center; gap: 10px }
+
+  /* Indicadores */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden }
+  .kpi .l { color: var(--muted); font-size: 13px; font-weight: 600 }
+  .kpi .v { font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-top: 4px }
+  .kpi.destaque { background: linear-gradient(135deg, var(--brand), #13a487); color: #fff; border-color: transparent }
+  .kpi.destaque .l { color: rgba(255,255,255,.85) }
+  .kpi.nota { grid-column: 1 / -1; padding: 10px 16px; box-shadow: none; background: transparent; border-style: dashed }
+
+  /* Listas e tabelas */
+  .lista { display: flex; flex-direction: column; gap: 10px }
+  .lista .item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; box-shadow: var(--shadow) }
+  .lista .item.clicavel { cursor: pointer; transition: border-color .15s, transform .1s } .lista .item.clicavel:hover { border-color: var(--brand) }
+  .grow { flex: 1; min-width: 200px }
+  .vazio { color: var(--muted); padding: 28px; text-align: center; background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--radius) }
+  .tabela { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow) }
+  table { width: 100%; border-collapse: collapse }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; background: var(--surface-2) }
+  tbody tr:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent) }
+  tr:last-child td { border-bottom: 0 }
+  .barra { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; min-width: 120px; margin-bottom: 4px }
+  .barra span { display: block; height: 100%; border-radius: 999px }
+  .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px }
+  .aviso { color: var(--muted); font-size: 13px; margin-top: 10px; padding: 10px 14px; background: var(--surface-2); border-radius: var(--radius-sm) }
+  details.item summary { cursor: pointer; list-style: none; display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+
+  /* Diálogos */
+  dialog { background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 18px; width: min(640px, calc(100vw - 32px)); max-height: 85vh; padding: 22px; box-shadow: var(--shadow-lg) }
+  dialog::backdrop { background: rgba(15,23,42,.45); backdrop-filter: blur(2px) }
+  .falas { display: flex; flex-direction: column; gap: 6px; margin-top: 8px }
+  .fala { padding: 9px 13px; border-radius: 16px; max-width: 85%; white-space: pre-wrap; word-break: break-word; font-size: 14px }
+  .f-hospede { background: var(--brand); color: var(--brand-ink); margin-left: auto; border-bottom-right-radius: 5px }
+  .f-assistente { background: var(--surface-2); border-bottom-left-radius: 5px }
+  .f-sistema { background: transparent; color: var(--muted); font-size: 12.5px; text-align: center; max-width: 100%; align-self: center }
+  .alerta { background: var(--err-50); color: var(--err); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; align-items: center }
+  form.grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px } form.grade label { display: flex; flex-direction: column; gap: 6px }
+  form.grade .full { grid-column: 1 / -1 }
+
+  /* Entrada */
+  #login { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr }
+  #login .lado { background: linear-gradient(150deg, #0b6a57, #13a487 60%, #3cc9a8); color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between }
+  #login .lado .marca .logo { background: rgba(255,255,255,.18) }
+  #login .lado h2 { font-size: 34px; line-height: 1.15; color: #fff; margin: 0 0 12px; display: block; max-width: 440px }
+  #login .lado p { opacity: .85; max-width: 420px; margin: 0 }
+  #login .form { display: grid; place-items: center; padding: 32px 20px }
+  #login .caixa { width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px }
+  #login .caixa h1 { font-size: 24px; font-weight: 800 }
+  #formLogin { display: flex; flex-direction: column; gap: 12px }
+  .trocar { display: flex; gap: 4px; background: var(--surface-2); border-radius: 12px; padding: 4px }
+  .trocar button { flex: 1; background: transparent; color: var(--muted); border: 0; padding: 9px; border-radius: 9px; font: 600 14px var(--font); cursor: pointer }
+  .trocar button.ativo { background: var(--surface); color: var(--ink); box-shadow: var(--shadow) }
+
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr }
+    aside { position: sticky; top: 0; z-index: 5; height: auto; flex-direction: row; align-items: center; padding: 10px 12px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto }
+    aside .marca span { display: none }
+    #abas { flex-direction: row } #abas button { padding: 8px 10px; white-space: nowrap } #abas button span.txt { display: none }
+    #abas button.ativo span.txt { display: inline }
+    aside .usuario { margin: 0 0 0 auto; border: 0; padding: 0 } aside .usuario div { display: none }
+    .conteudo { padding: 18px 14px 48px }
+    #login { grid-template-columns: 1fr } #login .lado { padding: 28px 20px; gap: 18px } #login .lado h2 { font-size: 24px }
+  }
+  @media (max-width: 600px) { form.grade { grid-template-columns: 1fr } .kpi .v { font-size: 22px } .barra-topo h1 { font-size: 20px } }
 </style>
 </head>
 <body>
 <div id="login">
-  <h1>Back-office</h1>
-  <div class="trocar"><button class="ativo" data-modo="entrar">Entrar</button><button data-modo="cadastro">Pedir acesso</button></div>
-  <form id="formLogin" style="display:flex;flex-direction:column;gap:12px">
-    <input name="nome" placeholder="Seu nome" autocomplete="name" hidden>
-    <input name="email" type="email" placeholder="E-mail" autocomplete="email" required>
-    <input name="senha" type="password" placeholder="Senha" autocomplete="current-password" required minlength="8">
-    <button class="btn prim" id="btnLogin">Entrar</button>
-  </form>
-  <div class="erro" id="loginErro"></div>
-  <div class="mut" id="loginInfo"></div>
+  <div class="lado">
+    <span class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span>Reservas Diretas</span></span>
+    <div><h2>Mais reservas pelo seu canal, menos comissão para os portais.</h2>
+    <p>Acompanhe atendimentos, links de reserva, pagamentos e ocupação em um só lugar.</p></div>
+    <span style="opacity:.7;font-size:13px">Back-office do hotel</span>
+  </div>
+  <div class="form"><div class="caixa">
+    <h1>Bem-vindo de volta</h1>
+    <div class="trocar"><button class="ativo" data-modo="entrar">Entrar</button><button data-modo="cadastro">Pedir acesso</button></div>
+    <form id="formLogin">
+      <input name="nome" placeholder="Seu nome" autocomplete="name" hidden>
+      <input name="email" type="email" placeholder="E-mail" autocomplete="email" required>
+      <input name="senha" type="password" placeholder="Senha" autocomplete="current-password" required minlength="8">
+      <button class="btn prim grande" id="btnLogin">Entrar</button>
+    </form>
+    <div class="erro" id="loginErro"></div>
+    <div class="mut" id="loginInfo"></div>
+  </div></div>
 </div>
 
-<main id="app" hidden>
-  <header>
-    <h1>Back-office de Reservas</h1>
-    <span class="mut" id="atualizado"></span>
-    <span class="mut sair" id="quem"></span>
-    <button class="btn" id="recarregar">Atualizar</button>
-    <button class="btn" id="sair">Sair</button>
-  </header>
-  <nav id="abas">
-    <button data-aba="geral" class="ativo">Visão geral</button>
-    <button data-aba="atendimentos">Atendimentos <span class="badge" id="badgeAtend" hidden></span></button>
-    <button data-aba="locacoes">Locações</button>
-    <button data-aba="pagamentos">Pagamentos</button>
-    <button data-aba="quartos">Quartos</button>
-    <button data-aba="usuarios">Usuários <span class="badge" id="badgeUsu" hidden></span></button>
-  </nav>
+<div id="app" hidden>
+  <aside>
+    <span class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span>Reservas Diretas</span></span>
+    <nav id="abas">
+      <button data-aba="geral" class="ativo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h8V3H3zM13 21h8v-8h-8zM3 21h8v-6H3zM13 3v8h8V3z"/></svg><span class="txt">Visão geral</span></button>
+      <button data-aba="atendimentos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="txt">Atendimentos</span><span class="badge" id="badgeAtend" hidden></span></button>
+      <button data-aba="locacoes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span class="txt">Locações</span></button>
+      <button data-aba="pagamentos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="txt">Pagamentos</span></button>
+      <button data-aba="quartos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8M2 17h20M6 10V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/></svg><span class="txt">Quartos</span></button>
+      <button data-aba="usuarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span class="txt">Usuários</span><span class="badge" id="badgeUsu" hidden></span></button>
+    </nav>
+    <div class="usuario"><span class="ini" id="iniciais">?</span><div><strong id="quem"></strong><span class="mut">Administrador</span></div>
+      <button id="sair" title="Sair" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div>
+  </aside>
+  <main class="conteudo">
+  <div class="barra-topo">
+    <h1 id="tituloPagina">Visão geral</h1>
+    <div class="acoes"><span class="mut" id="atualizado"></span>
+      <button class="btn" id="recarregar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Atualizar</button></div>
+  </div>
 
   <section data-sec="geral">
     <div class="kpis" id="kpis"></div>
@@ -146,7 +202,8 @@
     </table></div>
     <p class="aviso">Quem quiser acesso usa "Pedir acesso" na tela de entrada. O pedido aparece aqui para qualquer admin aprovar ou recusar.</p>
   </section>
-</main>
+  </main>
+</div>
 
 <dialog id="dlgConversa">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -254,6 +311,7 @@ function trocarModoMantendo() { const info = $("#loginInfo").textContent; trocar
 async function abrirApp() {
   if (!eu) eu = await api("/eu");
   $("#quem").textContent = eu.nome;
+  $("#iniciais").textContent = eu.nome.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("#login").hidden = true; $("#app").hidden = false;
   await carregar();
 }
@@ -293,8 +351,8 @@ function desenharGeral() {
     ["Conversão do assistente", (i.conversao * 100).toFixed(1).replace(".", ",") + "%"],
     ["Receita via assistente", brl(i.receita_assistente)], ["Comissão economizada*", brl(i.comissao_economizada)],
   ];
-  $("#kpis").innerHTML = k.map(([l, v]) => `<div class="kpi"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("") +
-    `<div class="kpi" style="grid-column:1/-1;padding:8px 16px"><span class="mut">* 15% sobre a receita das reservas que vieram do assistente, comparado a vender pelos portais.</span></div>`;
+  $("#kpis").innerHTML = k.map(([l, v], n) => `<div class="kpi${n === 8 ? " destaque" : ""}"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div></div>`).join("") +
+    `<div class="kpi nota"><span class="mut">* 15% sobre a receita das reservas que vieram do assistente, comparado a vender pelos portais.</span></div>`;
   const b = $("#badgeAtend"); b.hidden = !i.aguardando_atendente; b.textContent = i.aguardando_atendente;
 
   const aguard = painel.atendimentos.filter((a) => a.precisa_atendente);
@@ -335,7 +393,7 @@ function desenharLoc() {
     if ([...EM_PROCESSO, "nao_convertido"].includes(x.status)) acoes = `<button class="btn" data-confirmar="${esc(x.lead_id)}">Confirmar</button>`;
     else if (x.codigo_motor) acoes = `<select data-status="${esc(x.codigo_motor)}">${["confirmada", "concluida", "cancelada", "no_show"].map((s) =>
       `<option value="${s}" ${s === x.status ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}</select>`;
-    const origem = x.lead_id ? `${esc(x.origem)}${x.conversa_id ? ` · <a href="#" data-conversa="${esc(x.conversa_id)}" style="color:var(--info)">conversa</a>` : ""}` : "manual";
+    const origem = x.lead_id ? `${esc(x.origem)}${x.conversa_id ? ` · <a href="#" data-conversa="${esc(x.conversa_id)}" >conversa</a>` : ""}` : "manual";
     return `<tr><td>${tagStatus(x.status)}</td><td>${esc(nomes[x.quarto_id] || x.quarto_id)}</td>
       <td>${dataBR(x.checkin)} a ${dataBR(x.checkout)}<div class="mut">${esc(x.hospedes || "")}</div></td>
       <td>${origem}<div class="mono">${esc(x.codigo_motor || "")}</div></td><td>${esc(x.hospede || x.pagamento?.nome || "—")}${x.pagamento ? `<div>${tagPag(x.pagamento.status)}</div>` : ""}</td><td>${brl(x.valor ?? x.pagamento?.valor)}</td><td>${acoes}</td></tr>`;
@@ -383,7 +441,7 @@ async function abrirConversa(id) {
   $("#dcTitulo").textContent = "Atendimento";
   $("#dcCanal").textContent = c.canal;
   $("#dcAtend").innerHTML = c.precisa_atendente
-    ? `<div class="item" style="background:#450a0a;border-radius:8px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center">
+    ? `<div class="alerta">
         <span class="grow">Aguardando atendente: ${esc(c.motivo_atendente || "")}</span>
         <button class="btn" data-resolver="${esc(c.id)}">Marcar como resolvido</button></div>` : "";
   $("#dcFalas").innerHTML = c.falas.map((f) => `<div class="fala f-${f.autor}">${esc(f.texto)}</div>`).join("") || `<p class="mut">Sem mensagens.</p>`;
@@ -426,6 +484,7 @@ document.addEventListener("click", async (e) => {
     catch (err) { alert(err.message); }
   } else if (t.dataset.aba) {
     document.querySelectorAll("#abas button").forEach((b) => b.classList.toggle("ativo", b === t));
+    $("#tituloPagina").textContent = t.querySelector(".txt").textContent;
     document.querySelectorAll("section[data-sec]").forEach((s) => (s.hidden = s.dataset.sec !== t.dataset.aba));
   } else if (t.dataset.conversa) { e.preventDefault(); abrirConversa(t.dataset.conversa).catch((err) => alert(err.message)); }
   else if (t.dataset.confirmar) abrirReserva(t.dataset.confirmar);

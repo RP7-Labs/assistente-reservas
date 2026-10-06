@@ -3,32 +3,35 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Status dos serviços</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilo.css">
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --tx:#e2e8f0; --mut:#64748b; --ok:#4ade80; --warn:#facc15; --err:#f87171; }
-  * { box-sizing:border-box }
-  body { margin:0; background:var(--bg); color:var(--tx); font:16px/1.4 system-ui,-apple-system,sans-serif }
-  main { max-width:800px; margin:0 auto; padding:40px 16px }
-  h1 { font-size:26px; margin:0 0 6px }
-  #resumo { margin:0 0 32px; font-size:17px }
-  h2 { font-size:13px; letter-spacing:.08em; color:var(--mut); font-weight:600; margin:24px 0 10px; text-transform:uppercase }
-  .item { display:flex; align-items:center; gap:14px; background:var(--card); border-radius:8px; padding:16px 20px; margin-bottom:10px }
-  .dot { width:12px; height:12px; border-radius:50%; flex:none; background:var(--mut) }
-  .nome { font-weight:600; font-size:18px }
-  .rota { font:13px ui-monospace,monospace; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .info { margin-left:auto; color:#94a3b8; font-size:14px; text-align:right; white-space:nowrap }
-  .ok .dot { background:var(--ok) } .pendente .dot { background:var(--warn) } .erro .dot { background:var(--err) }
-  footer { text-align:center; color:var(--mut); font-size:14px; margin-top:36px }
-  @media (max-width:560px) { .rota { display:none } .item { padding:14px } .nome { font-size:16px } }
+  main { max-width: 820px; margin: 0 auto; padding: 36px 16px 48px }
+  .cab { display: flex; align-items: center; gap: 12px; margin-bottom: 18px }
+  h1 { font-size: 26px; font-weight: 800 }
+  #resumo { margin: 0 0 28px; font-size: 16px; font-weight: 700; padding: 14px 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border) }
+  h2 { font-size: 12px; letter-spacing: .08em; color: var(--muted); font-weight: 700; margin: 26px 0 10px; text-transform: uppercase }
+  .grupo { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden }
+  .item { display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid var(--border) }
+  .item:last-child { border-bottom: 0 }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--faint); box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent) }
+  .nome { font-weight: 700 }
+  .rota { font: 12.5px ui-monospace, monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .info { margin-left: auto; color: var(--muted); font-size: 13.5px; text-align: right }
+  .ok .dot { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-50) } .pendente .dot { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-50) } .erro .dot { background: var(--err); box-shadow: 0 0 0 4px var(--err-50) }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 30px }
+  @media (max-width: 560px) { .rota { display: none } .item { padding: 13px 14px; flex-wrap: wrap } .info { margin-left: 24px; text-align: left; width: 100% } }
 </style>
 </head>
 <body>
 <main>
-  <h1>Assistente de Reservas — Status dos serviços</h1>
+  <div class="cab"><span class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span></span><h1>Status dos serviços</h1></div>
   <p id="resumo">Verificando…</p>
   <h2>Backend</h2>
-  <div id="backend"></div>
+  <div class="grupo" id="backend"></div>
   <h2>Canais e integrações</h2>
-  <div id="canais"></div>
+  <div class="grupo" id="canais"></div>
   <footer id="rodape"></footer>
 </main>
 <script>
@@ -40,9 +43,11 @@ const BACKEND = [
 ];
 const CANAIS = [
   { id: "web", nome: "Chat web", rota: "/" },
-  { id: "ia", nome: "Assistente IA", rota: "Claude" },
+  { id: "ia", nome: "Assistente", rota: "IA ou regras" },
   { id: "rastreio", nome: "Links rastreáveis", rota: "/r/:id" },
   { id: "whatsapp", nome: "WhatsApp", rota: "/webhook/whatsapp" },
+  { id: "pagamento", nome: "Pagamento", rota: "/pagamento" },
+  { id: "email", nome: "E-mail", rota: "Resend" },
 ];
 
 function montar(alvo, lista) {
@@ -71,7 +76,7 @@ async function atualizar() {
   marcar("web", web.ok ? "ok" : "erro", http(web));
 
   const servicos = Object.fromEntries((health.corpo?.servicos || []).map(s => [s.nome, s]));
-  for (const id of ["banco", "ia", "rastreio", "whatsapp"]) {
+  for (const id of ["banco", "ia", "rastreio", "whatsapp", "pagamento", "email"]) {
     const s = servicos[id];
     if (!s) { marcar(id, "erro", "sem dados"); continue; }
     marcar(id, s.estado, s.estado === "ok" ? (s.ms != null ? `${s.detalhe} · ${s.ms}ms` : s.detalhe) : s.detalhe);
