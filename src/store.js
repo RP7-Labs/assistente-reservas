@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [] };
   }
 }
 function gravarArquivo(db) {
@@ -322,4 +322,60 @@ export async function trocarBloqueios(canalId, bloqueios) {
 export async function listarBloqueios() {
   if (sb) return verificar(await sb.from("bloqueios").select("*").order("checkin"));
   return [...lerArquivo().bloqueios].sort((a, b) => a.checkin.localeCompare(b.checkin));
+}
+
+// ---- Check-in digital: unidades com fechadura e fichas ----
+
+export async function listarUnidades() {
+  if (sb) return verificar(await sb.from("unidades").select("*").order("numero"));
+  return [...lerArquivo().unidades].sort((a, b) => a.numero.localeCompare(b.numero, "pt-BR", { numeric: true }));
+}
+
+export async function salvarUnidade(u) {
+  if (sb) return verificar(await sb.from("unidades").upsert(u).select().single());
+  const db = lerArquivo();
+  const i = db.unidades.findIndex((x) => x.numero === u.numero);
+  if (i >= 0) db.unidades[i] = { ...db.unidades[i], ...u };
+  else db.unidades.push({ ativa: true, criado_em: new Date().toISOString(), ...u });
+  gravarArquivo(db);
+  return db.unidades[i >= 0 ? i : db.unidades.length - 1];
+}
+
+export async function removerUnidade(numero) {
+  if (sb) {
+    verificar(await sb.from("unidades").delete().eq("numero", numero));
+    return;
+  }
+  const db = lerArquivo();
+  db.unidades = db.unidades.filter((u) => u.numero !== numero);
+  gravarArquivo(db);
+}
+
+export async function buscarCheckin({ codigo, token }) {
+  if (sb) {
+    const q = sb.from("checkins").select("*");
+    return verificar(await (codigo ? q.eq("codigo_reserva", codigo) : q.eq("token", token)).maybeSingle());
+  }
+  return lerArquivo().checkins.find((c) => (codigo ? c.codigo_reserva === codigo : c.token === token)) ?? null;
+}
+
+export async function salvarCheckin(c) {
+  const linha = { ...c, atualizado_em: new Date().toISOString() };
+  if (sb) return verificar(await sb.from("checkins").upsert(linha).select().single());
+  const db = lerArquivo();
+  const i = db.checkins.findIndex((x) => x.codigo_reserva === linha.codigo_reserva);
+  if (i >= 0) db.checkins[i] = { ...db.checkins[i], ...linha };
+  else db.checkins.push(linha);
+  gravarArquivo(db);
+  return db.checkins[i >= 0 ? i : db.checkins.length - 1];
+}
+
+export async function listarCheckins() {
+  if (sb) return verificar(await sb.from("checkins").select("*"));
+  return lerArquivo().checkins;
+}
+
+export async function buscarReserva(codigo) {
+  if (sb) return verificar(await sb.from("reservas").select("*").eq("codigo_motor", codigo).maybeSingle());
+  return lerArquivo().reservas.find((r) => r.codigo_motor === codigo) ?? null;
 }

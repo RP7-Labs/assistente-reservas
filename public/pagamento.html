@@ -111,6 +111,8 @@
     <h2>Reserva confirmada</h2>
     <p>Código da reserva: <code id="codigo"></code></p>
     <p class="mut" id="sucessoDetalhe"></p>
+    <a class="btn prim grande" id="irCheckin" hidden style="margin-top:8px">Fazer o check-in agora</a>
+    <p class="dica" id="dicaCheckin" hidden>Leva 2 minutos e você recebe a senha da porta, sem passar na recepção. O link também foi para o seu e-mail.</p>
   </div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
@@ -141,7 +143,8 @@ function mostrarResumo(p) {
   $("#btnCartao").textContent = `Pré-autorizar ${brl(p.total)}`;
 }
 
-function mostrarSucesso(codigo, detalhe) {
+function mostrarSucesso(codigo, detalhe, linkCheckin) {
+  if (linkCheckin) { $("#irCheckin").href = linkCheckin; $("#irCheckin").hidden = false; $("#dicaCheckin").hidden = false; }
   ["#passoDados", "#passoPagar"].forEach((s) => ($(s).hidden = true));
   $("#titulo").textContent = "Tudo certo!";
   $("#codigo").textContent = codigo;
@@ -207,7 +210,7 @@ $("#formCartao").addEventListener("submit", async (e) => {
   try {
     const r = await api("/cartao", Object.fromEntries(new FormData(e.target)));
     const f = e.target.numero.value.replace(/\D/g, "").slice(-4);
-    mostrarSucesso(r.codigo_reserva, `Valor de ${brl(pedido.total)} pré-autorizado no cartão final ${f}. Enviamos a confirmação para o seu e-mail.`);
+    mostrarSucesso(r.codigo_reserva, `Valor de ${brl(pedido.total)} pré-autorizado no cartão final ${f}. Enviamos a confirmação para o seu e-mail.`, r.link_checkin);
   } catch (err) { $("#erroCartao").textContent = err.message; }
   b.disabled = false;
 });
@@ -231,7 +234,7 @@ $("#btnSimularPix").addEventListener("click", async () => {
   const b = $("#btnSimularPix"); b.disabled = true; $("#erroPix2").textContent = "";
   try {
     const r = await api("/pix/simular", {});
-    mostrarSucesso(r.codigo_reserva, `Pagamento de ${brl(pedido.total)} por Pix recebido. Enviamos a confirmação para o seu e-mail.`);
+    mostrarSucesso(r.codigo_reserva, `Pagamento de ${brl(pedido.total)} por Pix recebido. Enviamos a confirmação para o seu e-mail.`, r.link_checkin);
   } catch (err) { $("#erroPix2").textContent = err.message; }
   b.disabled = false;
 });

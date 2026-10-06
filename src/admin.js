@@ -7,8 +7,12 @@ import {
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
   listarCanais, listarBloqueios, salvarCanal, removerCanal,
+  listarUnidades, salvarUnidade, removerUnidade, listarCheckins, buscarReserva,
 } from "./store.js";
 import { novoToken, urlValida } from "./ical.js";
+import { garantirCheckin, emitirSenha, revogarSenha, linkCheckin, textoLinkCheckin, OPCOES_FICHA } from "./checkin.js";
+import { modoFechaduras } from "./fechaduras.js";
+import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
 import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento } from "./pagamento.js";
@@ -211,6 +215,11 @@ admin.patch("/reservas/:codigo", rota(async (req, res) => {
   const { status } = req.body ?? {};
   if (!STATUS_RESERVA.includes(status)) return res.status(400).json({ erro: "Status inválido" });
   const ok = await atualizarStatusReserva(req.params.codigo, status);
+  // Reserva cancelada ou no-show perde a senha da porta
+  if (ok && ["cancelada", "no_show"].includes(status)) {
+    await revogarSenha(req.params.codigo).catch((err) => console.error(err));
+    await eventoFNRH(req.params.codigo, status === "cancelada" ? "cancelar" : "noshow").catch((err) => console.error(err));
+  }
   res.status(ok ? 200 : 404).json(ok ? { ok: true } : { erro: "Reserva não encontrada" });
 }));
 
@@ -228,7 +237,11 @@ admin.post("/pagamentos/:lead/:acao", rota(async (req, res) => {
   if (!pag) return res.status(404).json({ erro: "Pagamento não encontrado" });
   if (pag.status !== "pre_autorizado") return res.status(409).json({ erro: "Só pré-autorizações podem ser capturadas ou liberadas" });
   const salvo = await salvarPagamento({ ...pag, status: acao === "capturar" ? "capturado" : "liberado" });
-  if (acao === "liberar" && pag.codigo_reserva) await atualizarStatusReserva(pag.codigo_reserva, "cancelada");
+  if (acao === "liberar" && pag.codigo_reserva) {
+    await atualizarStatusReserva(pag.codigo_reserva, "cancelada");
+    await revogarSenha(pag.codigo_reserva).catch((err) => console.error(err));
+    await eventoFNRH(pag.codigo_reserva, "cancelar").catch((err) => console.error(err));
+  }
   const lead = await buscarLead(pag.lead_id);
   if (lead) await emailPagamento(carregarHotel(), lead, salvo, salvo.status);
   res.json({ ok: true });
@@ -241,4 +254,89 @@ admin.post("/email-teste", rota(async (req, res) => {
     texto: `Olá, ${req.admin.nome}!\n\nSe você recebeu este e-mail, o envio está funcionando.`,
   });
   res.json({ ...r, para: req.admin.email, remetente: process.env.EMAIL_FROM || null });
+}));
+
+// ---- Check-in digital: unidades, fichas e senhas ----
+
+const baseUrl = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+const NOMES = OPCOES_FICHA;
+
+admin.get("/checkins", rota(async (req, res) => {
+  let unidades = [], checkins = [], pendente = null;
+  try {
+    [unidades, checkins] = await Promise.all([listarUnidades(), listarCheckins()]);
+  } catch (err) {
+    pendente = `Rode a migração db/007_checkin.sql no Supabase (${err.message})`;
+  }
+  const { reservas } = await listarDados();
+  const hoje = new Date().toISOString().slice(0, 10);
+  const porCodigo = new Map(checkins.map((c) => [c.codigo_reserva, c]));
+  const lista = reservas
+    .filter((r) => r.checkout >= hoje && ["confirmada", "concluida", "cancelada", "no_show"].includes(r.status))
+    .sort((a, b) => a.checkin.localeCompare(b.checkin))
+    .map((r) => {
+      const c = porCodigo.get(r.codigo_motor);
+      return {
+        codigo: r.codigo_motor, quarto_id: r.quarto_id, checkin: r.checkin, checkout: r.checkout, hospede: r.hospede, status_reserva: r.status,
+        status: c?.status ?? null, link: c ? linkCheckin(baseUrl(req), c.token) : null, unidade: c?.unidade ?? null,
+        chegada_prevista: c?.chegada_prevista ?? null, hospedes: c?.hospedes ?? null, concluido_em: c?.concluido_em ?? null,
+        fnrh_status: c?.fnrh_status ?? null, fnrh_erro: c?.fnrh_erro ?? null, fnrh_entrada_em: c?.fnrh_entrada_em ?? null, fnrh_saida_em: c?.fnrh_saida_em ?? null,
+        senha: c?.senha ?? null, senha_status: c?.senha_status ?? null, senha_erro: c?.senha_erro ?? null, senha_inicio: c?.senha_inicio ?? null, senha_fim: c?.senha_fim ?? null,
+      };
+    });
+  res.json({ pendente, modo: modoFechaduras(), modo_fnrh: modoFNRH(), unidades, reservas: lista, nomes: NOMES, quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome })) });
+}));
+
+// Cria (se preciso) o link de pré-check-in; com enviar=true manda por e-mail para quem pagou
+admin.post("/checkins/:codigo/link", rota(async (req, res) => {
+  const reserva = await buscarReserva(req.params.codigo);
+  if (!reserva) return res.status(404).json({ erro: "Reserva não encontrada" });
+  const ck = await garantirCheckin(reserva.codigo_motor);
+  const link = linkCheckin(baseUrl(req), ck.token);
+  let enviado = null;
+  if (req.body?.enviar) {
+    const pag = reserva.lead_id && (await buscarPagamento(reserva.lead_id));
+    if (!pag?.email) return res.status(400).json({ erro: "Esta reserva não tem e-mail. Copie o link e mande pelo WhatsApp.", link });
+    const hotel = carregarHotel();
+    await enviarEmail({
+      para: pag.email, tipo: "checkin_link", leadId: reserva.lead_id, assunto: `Faça seu check-in online – ${hotel.nome}`,
+      texto: `Olá, ${(pag.nome || "").split(" ")[0]}!\n\n${textoLinkCheckin(baseUrl(req), ck.token)}\n\n${hotel.nome}`,
+    });
+    enviado = pag.email;
+  }
+  res.json({ link, enviado });
+}));
+
+admin.post("/checkins/:codigo/senha", rota(async (req, res) => {
+  const ck = await emitirSenha(req.params.codigo);
+  res.json({ ok: !["erro", "sem_unidade"].includes(ck.senha_status), senha_status: ck.senha_status, erro: ck.senha_erro });
+}));
+
+admin.delete("/checkins/:codigo/senha", rota(async (req, res) => {
+  const ck = await revogarSenha(req.params.codigo);
+  res.json({ ok: ck?.senha_status === "revogada", erro: ck?.senha_erro ?? null });
+}));
+
+// FNRH: reenviar a ficha, registrar entrada ou saída à mão
+admin.post("/checkins/:codigo/fnrh/:evento", rota(async (req, res) => {
+  const { codigo, evento } = req.params;
+  if (!["registrar", "entrada", "saida"].includes(evento)) return res.status(400).json({ erro: "Ação inválida" });
+  const ck = evento === "registrar" ? await registrarFicha(codigo) : await eventoFNRH(codigo, evento);
+  if (!ck) return res.status(404).json({ erro: "Check-in não encontrado" });
+  res.json({ ok: !ck.fnrh_erro, erro: ck.fnrh_erro ?? null });
+}));
+
+admin.post("/unidades", rota(async (req, res) => {
+  const b = req.body ?? {};
+  const numero = String(b.numero ?? "").trim().slice(0, 20);
+  if (!numero) return res.status(400).json({ erro: "Informe o número da unidade." });
+  if (!carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  const lock = String(b.lock_id ?? "").trim();
+  if (lock && !/^\d{1,15}$/.test(lock)) return res.status(400).json({ erro: "O ID da fechadura é o número que aparece no app TTLock (só dígitos)." });
+  res.json(await salvarUnidade({ numero, quarto_id: b.quarto_id, lock_id: lock || null, ativa: b.ativa !== false }));
+}));
+
+admin.delete("/unidades/:numero", rota(async (req, res) => {
+  await removerUnidade(req.params.numero);
+  res.json({ ok: true });
 }));

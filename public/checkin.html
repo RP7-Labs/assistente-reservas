@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-in online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilo.css">
+<style>
+  body { background: radial-gradient(1000px 500px at 0% -10%, var(--brand-50), transparent 60%), var(--bg) }
+  .topo { display: flex; align-items: center; gap: 10px; max-width: 560px; margin: 0 auto; padding: 18px 16px 4px }
+  .topo .seguro { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); font-weight: 600 }
+  .topo .seguro svg { width: 15px; height: 15px; color: var(--ok) }
+  main { max-width: 560px; margin: 0 auto; padding: 12px 16px 40px }
+  h1 { font-size: 24px; font-weight: 800; margin: 6px 0 6px } .sub { color: var(--muted); margin: 0 0 16px }
+  h2 { font-size: 16px; font-weight: 700; margin: 0 0 14px; display: flex; align-items: center; gap: 10px }
+  h2 .num { width: 26px; height: 26px; border-radius: 50%; background: var(--brand-50); color: var(--brand); display: grid; place-items: center; font-size: 13px; font-weight: 800 }
+  .card { padding: 20px; margin-bottom: 14px }
+  .resumo { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px } .resumo b { display: block; font-size: 15px }
+  label { display: block; margin-bottom: 12px }
+  label input, label select { display: block; width: 100%; margin-top: 6px }
+  .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px }
+  .tripla { display: grid; grid-template-columns: 2fr 1fr 1.4fr; gap: 0 12px }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px }
+  .chips button { border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font: 600 13.5px var(--font); cursor: pointer }
+  .chips button.ativo { border-color: var(--brand); color: var(--brand); background: var(--brand-50) }
+  .rotulo { font-size: 13px; color: var(--ink-2); font-weight: 600 }
+  .aceite { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; font-size: 13.5px; color: var(--ink-2) } .aceite input { width: 18px; height: 18px; margin: 2px 0 0; flex: none }
+  .enviar { width: 100%; padding: 14px 16px; border: 0; border-radius: 12px; background: var(--brand); color: var(--brand-ink); font: 700 15px var(--font); cursor: pointer }
+  .enviar:disabled { opacity: .6 }
+  .menor { font-size: 12px; margin-left: 6px }
+  .ok { text-align: center; padding: 28px 20px }
+  .ok .icone { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 14px; background: var(--ok-50); color: var(--ok); display: grid; place-items: center; font-size: 32px; font-weight: 800 }
+  .senha { font: 800 40px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .18em; color: var(--ink); background: var(--surface-2); border-radius: 14px; padding: 18px 10px; margin: 10px 0 }
+  .quarto { font-size: 15px; color: var(--muted) } .quarto b { color: var(--ink); font-size: 20px }
+  .teste { background: var(--accent-50); color: var(--warn); border-radius: 12px; padding: 9px 14px; font-size: 13px; font-weight: 600; margin-top: 12px }
+  @media (max-width: 460px) { .tripla { grid-template-columns: 1fr 1fr } .tripla > :first-child { grid-column: 1 / -1 } }
+</style>
+</head>
+<body>
+<div class="topo"><span class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span id="nomeHotel">Check-in online</span></span>
+  <span class="seguro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Dados protegidos</span></div>
+<main>
+  <h1 id="titulo">Check-in online</h1>
+  <p class="sub" id="subtitulo">Preencha a ficha de hóspedes e receba a senha da porta.</p>
+  <div class="erro" id="erroGeral"></div>
+
+  <div class="card resumo" id="resumo" hidden></div>
+
+  <form id="ficha" hidden>
+    <div id="hospedes"></div>
+    <div class="card">
+      <h2><span class="num" id="numViagem">2</span>Sobre a viagem</h2>
+      <span class="rotulo">Motivo</span><div class="chips" data-campo="motivo"></div>
+      <span class="rotulo">Como você vem</span><div class="chips" data-campo="transporte"></div>
+      <label>Horário previsto de chegada (opcional) <input type="time" name="chegada_prevista"></label>
+      <label class="aceite"><input type="checkbox" name="aceite" required>
+        <span>Autorizo o uso destes dados para o registro de hóspedes exigido por lei (Ficha Nacional de Registro de Hóspedes) e para a minha hospedagem.</span></label>
+      <div class="erro" id="erroFicha"></div>
+      <button class="enviar" id="btnEnviar">Concluir check-in</button>
+    </div>
+  </form>
+
+  <div class="card ok" id="pronto" hidden>
+    <div class="icone">✓</div>
+    <h2 style="justify-content:center;font-size:20px">Check-in concluído</h2>
+    <div id="acesso"></div>
+  </div>
+</main>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const br = (d) => d.split("-").reverse().join("/");
+const hora = (iso) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const token = new URLSearchParams(location.search).get("c");
+let dados = null;
+const escolha = { motivo: "LAZER_FERIAS", transporte: "AUTOMOVEL" };
+
+const opcoes = (mapa, sel) => Object.entries(mapa).map(([k, v]) => `<option value="${k}"${k === sel ? " selected" : ""}>${esc(v)}</option>`).join("");
+
+const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
+const paises = (sel) => opcoes(dados.opcoes.paises, sel) + `<option value="outro">Outro país</option>`;
+
+function cartaoHospede(i, sug) {
+  const titular = i === 0;
+  const o = dados.opcoes;
+  return `<div class="card" data-h="${i}">
+    <h2><span class="num">${i + 1}</span>${titular ? "Titular da reserva" : `Hóspede ${i + 1}`}<span class="tag menor" hidden>menor de idade</span></h2>
+    <label>Nome completo <input name="nome" autocomplete="${titular ? "name" : "off"}" value="${esc(titular ? sug?.nome : "")}" required></label>
+    <div class="dupla">
+      <label>Nascimento <input type="date" name="nascimento" required></label>
+      <label>Nacionalidade <select name="nacionalidade" data-pais>${paises("BR")}</select></label>
+    </div>
+    <label class="outroPais" hidden>Código do país (2 letras, ex.: NL) <input name="nacionalidade_outro" maxlength="2"></label>
+    <div class="dupla">
+      <label>Documento <select name="documento_tipo">${opcoes(o.documentos, "CPF")}</select></label>
+      <label>Número <input name="documento_numero" autocomplete="off" required></label>
+    </div>
+    <p class="mut dicaMenor" hidden style="margin:-6px 0 12px">Para crianças, use o CPF que está na certidão de nascimento.</p>
+    <div class="dupla">
+      <label>Gênero <select name="genero">${opcoes(o.generos, "NAOINFORMADO")}</select></label>
+      <label>Cor ou raça <select name="raca">${opcoes(o.racas, "NAOINFORMAR")}</select></label>
+    </div>
+    <div class="dupla">
+      <label>Pessoa com deficiência? <select name="deficiencia" data-def>${opcoes(o.deficiencias, "NAO")}</select></label>
+      <label class="tipoDef" hidden>Tipo <select name="tipo_deficiencia"><option value="">Selecione</option>${opcoes(o.tipos_deficiencia)}</select></label>
+    </div>
+    ${titular ? `
+    <div class="dupla">
+      <label>E-mail <input type="email" name="email" autocomplete="email" value="${esc(sug?.email)}" required></label>
+      <label>Celular com DDD <input type="tel" name="telefone" autocomplete="tel" value="${esc(sug?.telefone)}" required></label>
+    </div>
+    <label>País onde mora <select name="pais_residencia" data-residencia>${paises("BR")}</select></label>
+    <div class="dupla moraBR">
+      <label>Estado <select name="uf" data-uf><option value="">UF</option>${UFS.map((u) => `<option>${u}</option>`).join("")}</select></label>
+      <label>Cidade <select name="cidade_id" data-cidade disabled><option value="">Escolha o estado</option></select></label>
+    </div>
+    <div class="dupla moraFora" hidden>
+      <label>Cidade onde mora <input name="cidade_fora"></label>
+      <label class="outroResid" hidden>Código do país (2 letras) <input name="pais_residencia_outro" maxlength="2"></label>
+    </div>` : ""}
+  </div>`;
+}
+
+// Cidades pelo código do IBGE, que a FNRH exige para quem mora no Brasil
+async function carregarCidades(uf, sel) {
+  sel.disabled = true; sel.innerHTML = `<option value="">Carregando...</option>`;
+  try {
+    const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios?orderBy=nome`);
+    const lista = await r.json();
+    sel.innerHTML = `<option value="">Selecione a cidade</option>` + lista.map((c) => `<option value="${c.id}">${esc(c.nome)}</option>`).join("");
+    sel.disabled = false;
+  } catch { sel.innerHTML = `<option value="">Não foi possível carregar as cidades</option>`; }
+}
+document.addEventListener("change", (e) => {
+  const t = e.target, card = t.closest("[data-h]");
+  if (!card) return;
+  if (t.matches("[data-pais]")) $(".outroPais", card).hidden = t.value !== "outro";
+  if (t.matches("[data-def]")) $(".tipoDef", card).hidden = t.value !== "SIM";
+  if (t.matches("[data-uf]") && t.value) carregarCidades(t.value, $("[data-cidade]", card));
+  if (t.matches("[data-residencia]")) { $(".moraBR", card).hidden = t.value !== "BR"; $(".moraFora", card).hidden = t.value === "BR"; $(".outroResid", card).hidden = t.value !== "outro"; }
+});
+
+// Marca quem é menor de idade na data de entrada
+function idadeNa(nasc, ref) { const [a, m, d] = nasc.split("-").map(Number), [ra, rm, rd] = ref.split("-").map(Number); return ra - a - (rm < m || (rm === m && rd < d) ? 1 : 0); }
+document.addEventListener("input", (e) => {
+  if (e.target.name !== "nascimento") return;
+  const card = e.target.closest("[data-h]");
+  const menor = e.target.value && idadeNa(e.target.value, dados.reserva.checkin) < 18;
+  $(".menor", card).hidden = !menor;
+  $(".dicaMenor", card).hidden = !menor;
+});
+
+function chips(campo, mapa) {
+  const el = $(`[data-campo=${campo}]`);
+  el.innerHTML = Object.entries(mapa).map(([k, v]) => `<button type="button" data-v="${k}" class="${k === escolha[campo] ? "ativo" : ""}">${esc(v)}</button>`).join("");
+  el.onclick = (e) => { const b = e.target.closest("button"); if (!b) return; escolha[campo] = b.dataset.v; el.querySelectorAll("button").forEach((x) => x.classList.toggle("ativo", x === b)); };
+}
+
+function mostrarPronto(a) {
+  $("#ficha").hidden = true; $("#resumo").hidden = true;
+  $("#titulo").textContent = "Tudo pronto!"; $("#subtitulo").textContent = "";
+  $("#acesso").innerHTML = a?.senha
+    ? `<p class="quarto">Seu quarto é o <b>${esc(a.unidade)}</b></p>
+       <p class="mut" style="margin:14px 0 0">Senha da porta</p><div class="senha">${esc(a.senha)}</div>
+       <p class="mut">Vale de ${hora(a.inicio)} até ${hora(a.fim)}. Digite no teclado da fechadura e confirme. Enviamos também para o seu e-mail.</p>
+       ${a.simulada ? `<div class="teste">Ambiente de testes: esta senha não foi gravada em nenhuma fechadura.</div>` : ""}`
+    : `<p>Recebemos seus dados. A recepção entrega o acesso ao quarto na sua chegada.</p>`;
+  $("#pronto").hidden = false;
+}
+
+async function iniciar() {
+  if (!token) { $("#erroGeral").textContent = "Link incompleto. Use o link que enviamos por e-mail."; return; }
+  const r = await fetch(`/api/checkin/${encodeURIComponent(token)}`);
+  dados = await r.json().catch(() => ({}));
+  if (!r.ok) { $("#erroGeral").textContent = dados.erro || "Não foi possível abrir o check-in."; return; }
+  const { hotel, reserva } = dados;
+  $("#nomeHotel").textContent = hotel.nome;
+  document.title = `Check-in · ${hotel.nome}`;
+  if (dados.concluido) return mostrarPronto(dados.acesso);
+  if (!reserva.ativa) { $("#erroGeral").textContent = "Esta reserva não está ativa. Fale com o hotel."; return; }
+  const pessoas = reserva.adultos + reserva.criancas;
+  $("#resumo").innerHTML = `<div><span class="mut">Reserva</span><b>${esc(reserva.codigo)}</b></div><div><span class="mut">Quarto</span><b>${esc(reserva.quarto)}</b></div>
+    <div><span class="mut">Entrada</span><b>${br(reserva.checkin)} · ${esc(hotel.checkin)}</b></div><div><span class="mut">Saída</span><b>${br(reserva.checkout)} · ${esc(hotel.checkout)}</b></div>`;
+  $("#resumo").hidden = false;
+  $("#hospedes").innerHTML = Array.from({ length: Math.max(pessoas, 1) }, (_, i) => cartaoHospede(i, dados.sugestao)).join("");
+  $("#numViagem").textContent = Math.max(pessoas, 1) + 1;
+  chips("motivo", dados.opcoes.motivos); chips("transporte", dados.opcoes.transportes);
+  $("#ficha").hidden = false;
+}
+
+$("#ficha").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const hospedes = [...document.querySelectorAll("[data-h]")].map((card) => {
+    const h = {};
+    card.querySelectorAll("input, select").forEach((i) => (h[i.name] = i.value.trim()));
+    if (h.nacionalidade === "outro") h.nacionalidade = h.nacionalidade_outro;
+    if (h.pais_residencia === "outro") h.pais_residencia = h.pais_residencia_outro;
+    if (h.cidade_id) h.cidade = $("[data-cidade]", card).selectedOptions[0]?.textContent;
+    else if (h.cidade_fora) h.cidade = h.cidade_fora;
+    return h;
+  });
+  Object.assign(hospedes[0], escolha);
+  const corpo = { hospedes, chegada_prevista: e.target.chegada_prevista.value, aceite: e.target.aceite.checked };
+  $("#btnEnviar").disabled = true; $("#erroFicha").textContent = "";
+  try {
+    const r = await fetch(`/api/checkin/${encodeURIComponent(token)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erro || "Não foi possível concluir.");
+    const g = await (await fetch(`/api/checkin/${encodeURIComponent(token)}`)).json();
+    mostrarPronto(g.acesso);
+    scrollTo({ top: 0, behavior: "smooth" });
+  } catch (err) { $("#erroFicha").textContent = err.message; }
+  finally { $("#btnEnviar").disabled = false; }
+});
+
+iniciar().catch(() => ($("#erroGeral").textContent = "Não foi possível abrir o check-in."));
+</script>
+</body>
+</html>

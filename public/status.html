@@ -48,6 +48,8 @@ const CANAIS = [
   { id: "whatsapp", nome: "WhatsApp", rota: "/webhook/whatsapp" },
   { id: "pagamento", nome: "Pagamento", rota: "/pagamento" },
   { id: "email", nome: "E-mail", rota: "Resend" },
+  { id: "fechaduras", nome: "Fechaduras", rota: "TTLock" },
+  { id: "fnrh", nome: "Ficha de hóspedes", rota: "FNRH Digital" },
 ];
 
 function montar(alvo, lista) {
@@ -76,7 +78,7 @@ async function atualizar() {
   marcar("web", web.ok ? "ok" : "erro", http(web));
 
   const servicos = Object.fromEntries((health.corpo?.servicos || []).map(s => [s.nome, s]));
-  for (const id of ["banco", "ia", "rastreio", "whatsapp", "pagamento", "email"]) {
+  for (const id of ["banco", "ia", "rastreio", "whatsapp", "pagamento", "email", "fechaduras", "fnrh"]) {
     const s = servicos[id];
     if (!s) { marcar(id, "erro", "sem dados"); continue; }
     marcar(id, s.estado, s.estado === "ok" ? (s.ms != null ? `${s.detalhe} · ${s.ms}ms` : s.detalhe) : s.detalhe);

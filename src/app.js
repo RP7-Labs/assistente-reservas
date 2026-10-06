@@ -7,6 +7,9 @@ import { admin } from "./admin.js";
 import { pagamento, rotaLembretes } from "./pagamento.js";
 import { modoEmail } from "./email.js";
 import { calendarioExportado, sincronizarCanais } from "./canais.js";
+import { checkin } from "./checkin.js";
+import { modoFechaduras } from "./fechaduras.js";
+import { modoFNRH, tarefasFNRH } from "./fnrh.js";
 
 export const app = express();
 app.use(express.json());
@@ -43,6 +46,12 @@ app.get("/api/health", async (_req, res) => {
     modoEmail() === "resend"
       ? { nome: "email", estado: "ok", detalhe: "envio pela Resend" }
       : { nome: "email", estado: "pendente", detalhe: "simulado: e-mails ficam no back-office (falta RESEND_API_KEY, EMAIL_FROM)" },
+    modoFechaduras() === "ttlock"
+      ? { nome: "fechaduras", estado: "ok", detalhe: "senhas gravadas nas fechaduras pela TTLock" }
+      : { nome: "fechaduras", estado: "pendente", detalhe: "senhas simuladas (falta TTLOCK_CLIENT_ID, TTLOCK_CLIENT_SECRET, TTLOCK_USERNAME, TTLOCK_PASSWORD)" },
+    modoFNRH() === "simulado"
+      ? { nome: "fnrh", estado: "pendente", detalhe: "fichas guardadas aqui, sem envio (falta FNRH_USUARIO, FNRH_SENHA, FNRH_CPF_SOLICITANTE)" }
+      : { nome: "fnrh", estado: "ok", detalhe: `envio à FNRH Digital (${modoFNRH()})` },
     config("rastreio", "PUBLIC_URL"),
   ];
   res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
@@ -105,11 +114,13 @@ app.get("/api/ical/:arquivo", async (req, res) => {
 
 app.use("/api/admin", admin);
 app.use("/api/pagamento", pagamento);
+app.use("/api/checkin", checkin);
 // Tarefas do agendador (pg_cron do Supabase, a cada minuto): sincroniza os calendários vencidos
 // e manda os lembretes de pagamento por e-mail. A rota de lembretes confere o CRON_SECRET.
 app.all("/api/tarefas/lembretes", async (req, res, next) => {
   if (process.env.CRON_SECRET && req.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
     await sincronizarCanais().catch((err) => console.error("iCal:", err.message));
+    await tarefasFNRH().catch((err) => console.error("FNRH:", err.message));
   }
   next();
 }, rotaLembretes);

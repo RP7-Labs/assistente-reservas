@@ -94,3 +94,13 @@ A API do Airbnb só é liberada para parceiros convidados, então a integração
 - **Airbnb → aqui:** reservas e bloqueios do anúncio ocupam a unidade e saem da venda. Lemos a cada `ICAL_MINUTOS` (padrão 10) pelo mesmo pg_cron dos lembretes e de novo antes de cada pagamento. Se o Airbnb sair do ar, os bloqueios anteriores ficam.
 - **Aqui → Airbnb:** `/api/ical/<token>.ics` publica as noites em que o tipo de quarto lota (reservas daqui e de outros canais). O Airbnb lê esse link no ritmo dele.
 - Limites do iCal: não traz preço nem dados do hóspede, e a leitura do lado do Airbnb não é imediata, então há uma janela pequena de reserva dupla.
+
+## Check-in digital, FNRH e senhas da porta
+
+1. Rode `db/007_checkin.sql` no Supabase.
+2. Back-office, aba **Check-in**: cadastre as unidades (101, 102...) com o tipo de quarto e, se houver, o ID da fechadura TTLock.
+3. Quando a reserva é paga, o e-mail de confirmação leva o link `/checkin?c=<token>`. O hóspede preenche a ficha de todos (campos e códigos da FNRH Digital) e recebe o quarto e a senha da porta, válida só do horário de check-in ao de check-out.
+
+- **Senhas:** com `TTLOCK_*` configurado, a senha é gravada na fechadura pela API aberta da TTLock (precisa de gateway Wi-Fi). Sem isso, é simulada. Reserva cancelada, no-show ou pré-autorização liberada apaga a senha.
+- **FNRH Digital:** com `FNRH_*` configurado, a ficha vai para o governo (`POST /hospedagem/registrar`) quando o hóspede conclui o check-in. A saída é registrada no horário de check-out, e cancelamento e no-show também são enviados. A entrada é manual no back-office, ou automática com `FNRH_ENTRADA_AUTOMATICA=1`. Comece em `FNRH_AMBIENTE=homologacao`.
+- A documentação da API não diz como a "chave de API" vira o usuário e a senha do Basic Auth, nem qual situação inicial o PMS deve mandar (`FNRH_SITUACAO_INICIAL`, padrão `PRECHECKIN_REALIZADO`). Confirme os dois na homologação.

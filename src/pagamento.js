@@ -7,6 +7,7 @@ import { disponibilidade } from "./backoffice.js";
 import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
 import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
+import { garantirCheckin, textoLinkCheckin, linkCheckin } from "./checkin.js";
 
 export const MINUTOS_LEMBRETE = 5;
 // Cartão de teste que sempre é recusado
@@ -107,19 +108,19 @@ export async function emailPagamento(hotel, lead, pag, evento) {
   });
 }
 
-// E-mail com os dados da reserva confirmada
-async function emailReserva(hotel, lead, pag) {
+// E-mail com os dados da reserva confirmada e o link do pré-check-in
+async function emailReserva(hotel, lead, pag, ck, base) {
   if (!pag.email) return;
   const r = resumoPedido(hotel, lead);
   await enviarEmail({
     para: pag.email, tipo: "reserva_confirmada", leadId: lead.id,
     assunto: `Reserva ${pag.codigo_reserva} confirmada – ${hotel.nome}`,
-    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${hotel.politicas}\n\nAté breve!\n${hotel.nome}${AVISO_TESTE}`,
+    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkCheckin(base, ck.token)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${AVISO_TESTE}`,
   });
 }
 
 // Confirma a reserva depois do pagamento aprovado e manda os dois e-mails: pagamento e reserva
-async function confirmar(hotel, lead, pag, campos) {
+async function confirmar(hotel, lead, pag, campos, base) {
   const codigo = pag.codigo_reserva || `P-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
   const r = resumoPedido(hotel, lead);
   await salvarReserva({
@@ -127,9 +128,11 @@ async function confirmar(hotel, lead, pag, campos) {
     hospede: pag.nome, valor: r.total, status: "confirmada",
   });
   const salvo = await salvarPagamento({ ...pag, ...campos, codigo_reserva: codigo, pago_em: new Date().toISOString() });
+  // Antes da migração 007 não há tabela de check-in: a reserva segue sem o link
+  const ck = await garantirCheckin(codigo).catch((err) => { console.error("check-in:", err.message); return null; });
   await emailPagamento(hotel, lead, salvo, salvo.status);
-  await emailReserva(hotel, lead, salvo);
-  return salvo;
+  await emailReserva(hotel, lead, salvo, ck, base);
+  return { ...salvo, link_checkin: ck ? linkCheckin(base, ck.token) : null };
 }
 
 // Envia o e-mail com o link de pagamento para quem não pagou em MINUTOS_LEMBRETE minutos
@@ -219,8 +222,8 @@ pagamento.post("/:lead/cartao", rota(async (req, res) => {
   const pag = await confirmar(c.hotel, c.lead, c.pag, {
     metodo: "cartao", status: "pre_autorizado", cartao_final: v.final, cartao_bandeira: v.bandeira,
     autorizacao: crypto.randomBytes(3).toString("hex").toUpperCase(),
-  });
-  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva });
+  }, urlBase(req));
+  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
 }));
 
 // Pix: gera a cobrança (simulada)
@@ -238,8 +241,8 @@ pagamento.post("/:lead/pix/simular", rota(async (req, res) => {
   const c = await carregar(req, res);
   if (!c || !(await prontoParaPagar(c, res))) return;
   if (!c.pag.pix_txid) return res.status(400).json({ erro: "Gere o Pix primeiro." });
-  const pag = await confirmar(c.hotel, c.lead, c.pag, { metodo: "pix", status: "pago" });
-  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva });
+  const pag = await confirmar(c.hotel, c.lead, c.pag, { metodo: "pix", status: "pago" }, urlBase(req));
+  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
 }));
 
 // Tarefa agendada: lembretes por e-mail. Protegida por CRON_SECRET.
