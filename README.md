@@ -104,3 +104,14 @@ A API do Airbnb só é liberada para parceiros convidados, então a integração
 - **Senhas:** com `TTLOCK_*` configurado, a senha é gravada na fechadura pela API aberta da TTLock (precisa de gateway Wi-Fi). Sem isso, é simulada. Reserva cancelada, no-show ou pré-autorização liberada apaga a senha.
 - **FNRH Digital:** com `FNRH_*` configurado, a ficha vai para o governo (`POST /hospedagem/registrar`) quando o hóspede conclui o check-in. A saída é registrada no horário de check-out, e cancelamento e no-show também são enviados. A entrada é manual no back-office, ou automática com `FNRH_ENTRADA_AUTOMATICA=1`. Comece em `FNRH_AMBIENTE=homologacao`.
 - A documentação da API não diz como a "chave de API" vira o usuário e a senha do Basic Auth, nem qual situação inicial o PMS deve mandar (`FNRH_SITUACAO_INICIAL`, padrão `PRECHECKIN_REALIZADO`). Confirme os dois na homologação.
+
+## Tráfego pago até o assistente
+
+1. Rode `db/008_origens.sql` no Supabase.
+2. Aba **Campanhas**: gere o link do anúncio (UTM) e use-o como URL final no Google Ads ou na Meta. O chat guarda a campanha, o `gclid`/`fbclid` e o cookie `_fbp`, e manda tudo junto com a primeira mensagem. Anúncios de clique para o WhatsApp chegam com o `ctwa_clid`.
+3. Conversões:
+   - **Meta:** `InitiateCheckout` e `Purchase` pela API de Conversões (servidor), mais o Pixel no navegador com o mesmo `event_id`, para não contar em dobro. Conversa vinda de anúncio de WhatsApp vai como `business_messaging`.
+   - **Google Ads:** a tag de conversão dispara no pagamento aprovado (`transaction_id` = código da reserva). O botão "Baixar conversões para o Google Ads" gera o CSV de conversões offline por `gclid`.
+4. As tags só carregam depois do aceite de cookies (LGPD). Quem recusa continua com a origem guardada no servidor, mas sem Pixel nem tag.
+
+A aba mostra conversas, links, reservas pagas e receita por origem e campanha.

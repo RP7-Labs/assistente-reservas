@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [] };
   }
 }
 function gravarArquivo(db) {
@@ -140,6 +140,13 @@ export async function listarConversas(limite = 200) {
     .map(([id, mensagens]) => ({ id, mensagens, canal: "web", precisa_atendente: false, motivo_atendente: null, ...db.atendimentos[id] }))
     .sort((a, b) => String(b.atualizado_em).localeCompare(String(a.atualizado_em)))
     .slice(0, limite);
+}
+
+// Só id, canal e data das conversas (sem as mensagens), para relatórios
+export async function listarConversasResumo(limite = 2000) {
+  if (sb) return verificar(await sb.from("conversas").select("id, canal, atualizado_em").order("atualizado_em", { ascending: false }).limit(limite));
+  const db = lerArquivo();
+  return Object.keys(db.conversas).map((id) => ({ id, canal: db.atendimentos[id]?.canal ?? "web", atualizado_em: db.atendimentos[id]?.atualizado_em ?? null }));
 }
 
 export async function listarDados() {
@@ -378,4 +385,55 @@ export async function listarCheckins() {
 export async function buscarReserva(codigo) {
   if (sb) return verificar(await sb.from("reservas").select("*").eq("codigo_motor", codigo).maybeSingle());
   return lerArquivo().reservas.find((r) => r.codigo_motor === codigo) ?? null;
+}
+
+// ---- Origem das conversas (tráfego pago) e conversões enviadas às plataformas ----
+
+export async function buscarOrigem(conversaId) {
+  if (sb) return verificar(await sb.from("origens").select("*").eq("conversa_id", conversaId).maybeSingle());
+  return lerArquivo().origens.find((o) => o.conversa_id === conversaId) ?? null;
+}
+
+export async function salvarOrigem(origem) {
+  const linha = { ...origem, atualizado_em: new Date().toISOString() };
+  if (sb) {
+    verificar(await sb.from("origens").upsert(linha));
+    return linha;
+  }
+  const db = lerArquivo();
+  const i = db.origens.findIndex((o) => o.conversa_id === linha.conversa_id);
+  if (i >= 0) db.origens[i] = { ...db.origens[i], ...linha };
+  else db.origens.push({ criado_em: linha.atualizado_em, ...linha });
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function listarOrigens() {
+  if (sb) return verificar(await sb.from("origens").select("*").order("criado_em", { ascending: false }).limit(5000));
+  return lerArquivo().origens;
+}
+
+// Grava a tentativa de envio; devolve false se o mesmo evento já tinha sido enviado com sucesso
+export async function registrarConversao(c) {
+  const linha = { criado_em: new Date().toISOString(), ...c };
+  if (sb) {
+    const { error } = await sb.from("conversoes").upsert(linha, { onConflict: "plataforma,evento,event_id" });
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    return linha;
+  }
+  const db = lerArquivo();
+  const i = db.conversoes.findIndex((x) => x.plataforma === c.plataforma && x.evento === c.evento && x.event_id === c.event_id);
+  if (i >= 0) db.conversoes[i] = linha; else db.conversoes.push(linha);
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function buscarConversao(plataforma, evento, eventId) {
+  if (sb) return verificar(await sb.from("conversoes").select("*").eq("plataforma", plataforma).eq("evento", evento).eq("event_id", eventId).maybeSingle());
+  return lerArquivo().conversoes.find((x) => x.plataforma === plataforma && x.evento === evento && x.event_id === eventId) ?? null;
+}
+
+export async function listarConversoes(limite = 200) {
+  if (sb) return verificar(await sb.from("conversoes").select("*").order("criado_em", { ascending: false }).limit(limite));
+  return [...lerArquivo().conversoes].reverse().slice(0, limite);
 }

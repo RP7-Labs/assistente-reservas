@@ -1,4 +1,5 @@
 import { responder } from "./assistente.js";
+import { origemWhatsapp, registrarOrigem } from "./rastreio.js";
 
 // Webhook da WhatsApp Cloud API (Meta).
 export function rotasWhatsapp(app) {
@@ -16,6 +17,9 @@ export function rotasWhatsapp(app) {
         : m.type === "interactive" ? (m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id) : null;
       if (!texto) continue;
       try {
+        // Conversa aberta por anúncio de clique para o WhatsApp: guarda o anúncio e o ctwa_clid
+        const origem = origemWhatsapp(m);
+        if (origem) await registrarOrigem(`wa:${m.from}`, "whatsapp", origem).catch((err) => console.error("origem:", err.message));
         const { resposta, opcoes } = await responder({ conversaId: `wa:${m.from}`, texto, canal: "whatsapp" });
         await enviar(m.from, montarMensagem(resposta, opcoes));
       } catch (err) {

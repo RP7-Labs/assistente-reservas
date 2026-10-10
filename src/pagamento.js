@@ -8,6 +8,7 @@ import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
 import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
 import { garantirCheckin, textoLinkCheckin, linkCheckin } from "./checkin.js";
+import { enviarMeta } from "./rastreio.js";
 
 export const MINUTOS_LEMBRETE = 5;
 // Cartão de teste que sempre é recusado
@@ -132,6 +133,9 @@ async function confirmar(hotel, lead, pag, campos, base) {
   const ck = await garantirCheckin(codigo).catch((err) => { console.error("check-in:", err.message); return null; });
   await emailPagamento(hotel, lead, salvo, salvo.status);
   await emailReserva(hotel, lead, salvo, ck, base);
+  // Conversão para a Meta (o navegador manda a mesma com o Pixel; o event_id evita contar duas vezes)
+  await enviarMeta({ evento: "Purchase", eventId: codigo, leadId: lead.id, valor: r.total, pessoa: salvo, url: `${base}/pagamento` })
+    .catch((err) => console.error("Meta:", err.message));
   return { ...salvo, link_checkin: ck ? linkCheckin(base, ck.token) : null };
 }
 
@@ -199,6 +203,8 @@ pagamento.post("/:lead/dados", rota(async (req, res) => {
   if (!emailValido(email)) return res.status(400).json({ erro: "E-mail inválido." });
   if (c.pag && FINAIS.has(c.pag.status)) return res.status(409).json({ erro: "Esta reserva já foi paga." });
   const pag = await salvarPagamento({ lead_id: c.lead.id, nome, email, telefone, status: "pendente", iniciado_em: c.pag?.iniciado_em ?? new Date().toISOString(), valor: resumoPedido(c.hotel, c.lead).total });
+  await enviarMeta({ evento: "InitiateCheckout", eventId: `ic-${c.lead.id}`, leadId: c.lead.id, valor: pag.valor, pessoa: { nome, email, telefone }, url: `${urlBase(req)}/pagamento` })
+    .catch((err) => console.error("Meta:", err.message));
   res.json({ ok: true, status: pag.status });
 }));
 

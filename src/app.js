@@ -10,6 +10,7 @@ import { calendarioExportado, sincronizarCanais } from "./canais.js";
 import { checkin } from "./checkin.js";
 import { modoFechaduras } from "./fechaduras.js";
 import { modoFNRH, tarefasFNRH } from "./fnrh.js";
+import { configPublica, normalizarOrigem, registrarOrigem } from "./rastreio.js";
 
 export const app = express();
 app.use(express.json());
@@ -57,6 +58,9 @@ app.get("/api/health", async (_req, res) => {
   res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
 });
 
+// IDs públicos do Pixel da Meta e da tag do Google Ads (sem tokens)
+app.get("/api/rastreio/config", (_req, res) => res.json(configPublica()));
+
 // Dados públicos do hotel para o chat (nome no topo)
 app.get("/api/hotel", (_req, res) => {
   const h = carregarHotel();
@@ -64,9 +68,11 @@ app.get("/api/hotel", (_req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { conversaId, texto } = req.body ?? {};
+  const { conversaId, texto, origem } = req.body ?? {};
   if (!conversaId || !texto) return res.status(400).json({ erro: "conversaId e texto são obrigatórios" });
   try {
+    // De onde a pessoa veio (campanha, clique do anúncio); o chat manda na primeira mensagem
+    if (origem && typeof origem === "object") await registrarOrigem(conversaId, "web", normalizarOrigem(origem, req)).catch((err) => console.error("origem:", err.message));
     res.json(await responder({ conversaId, texto, canal: "web" }));
   } catch (err) {
     console.error(err);

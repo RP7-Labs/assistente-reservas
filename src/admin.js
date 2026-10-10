@@ -8,11 +8,13 @@ import {
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
   listarCanais, listarBloqueios, salvarCanal, removerCanal,
   listarUnidades, salvarUnidade, removerUnidade, listarCheckins, buscarReserva,
+  listarOrigens, listarConversoes, listarConversasResumo,
 } from "./store.js";
 import { novoToken, urlValida } from "./ical.js";
 import { garantirCheckin, emitirSenha, revogarSenha, linkCheckin, textoLinkCheckin, OPCOES_FICHA } from "./checkin.js";
 import { modoFechaduras } from "./fechaduras.js";
 import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
+import { fonte, csvGoogleAds, configMeta, configPublica } from "./rastreio.js";
 import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento } from "./pagamento.js";
@@ -339,4 +341,55 @@ admin.post("/unidades", rota(async (req, res) => {
 admin.delete("/unidades/:numero", rota(async (req, res) => {
   await removerUnidade(req.params.numero);
   res.json({ ok: true });
+}));
+
+// ---- Campanhas: de onde vêm as conversas e quanto cada origem vendeu ----
+
+async function dadosCampanhas(dias) {
+  const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
+  const [conversas, origens, { leads, reservas }, pagamentos] = await Promise.all([
+    listarConversasResumo(), listarOrigens().catch(() => []), listarDados(), listarPagamentos(),
+  ]);
+  const origemDe = new Map(origens.map((o) => [o.conversa_id, o]));
+  const pagDe = new Map(pagamentos.map((p) => [p.lead_id, p]));
+  const linhas = new Map();
+  const linha = (o) => {
+    const chave = `${fonte(o)}|${o?.utm_campaign ?? ""}`;
+    if (!linhas.has(chave)) linhas.set(chave, { fonte: fonte(o), campanha: o?.utm_campaign ?? null, conversas: 0, links: 0, reservas: 0, receita: 0 });
+    return linhas.get(chave);
+  };
+  for (const c of conversas.filter((c) => (c.atualizado_em ?? "") >= desde)) linha(origemDe.get(c.id)).conversas++;
+  const vendas = [];
+  for (const l of leads.filter((l) => l.criado_em >= desde)) {
+    const o = origemDe.get(l.conversa_id);
+    const item = linha(o);
+    item.links++;
+    const r = reservas.find((x) => x.lead_id === l.id && ["confirmada", "concluida"].includes(x.status));
+    if (r) {
+      item.reservas++;
+      item.receita += Number(r.valor ?? 0);
+      vendas.push({ codigo: r.codigo_motor, valor: Number(r.valor ?? 0), quando: pagDe.get(l.id)?.pago_em ?? r.criado_em ?? l.criado_em, fonte: fonte(o), campanha: o?.utm_campaign ?? null, gclid: o?.gclid ?? null });
+    }
+  }
+  return { linhas: [...linhas.values()].sort((a, b) => b.receita - a.receita || b.conversas - a.conversas), vendas };
+}
+
+admin.get("/campanhas", rota(async (req, res) => {
+  const dias = Math.min(Math.max(Number(req.query.dias) || 30, 1), 365);
+  const { linhas, vendas } = await dadosCampanhas(dias);
+  const pub = configPublica();
+  res.json({
+    dias, linhas, vendas: vendas.slice(0, 50),
+    conversoes: await listarConversoes(50).catch(() => []),
+    config: { meta_capi: Boolean(configMeta()), meta_pixel: Boolean(pub.meta_pixel), meta_whatsapp: Boolean(configMeta()?.waba), google_tag: Boolean(pub.google_ads && pub.google_compra) },
+    link_base: baseUrl(req),
+  });
+}));
+
+// Conversões offline para importar no Google Ads (reservas pagas que vieram de clique com gclid)
+admin.get("/campanhas/google-ads.csv", rota(async (req, res) => {
+  const dias = Math.min(Math.max(Number(req.query.dias) || 90, 1), 90);
+  const { vendas } = await dadosCampanhas(dias);
+  res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=conversoes-google-ads.csv" })
+    .send(csvGoogleAds(vendas));
 }));

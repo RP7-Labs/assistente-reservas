@@ -116,6 +116,7 @@
   </div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="/rastreio.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const lead = new URLSearchParams(location.search).get("lead");
@@ -211,6 +212,7 @@ $("#formCartao").addEventListener("submit", async (e) => {
     const r = await api("/cartao", Object.fromEntries(new FormData(e.target)));
     const f = e.target.numero.value.replace(/\D/g, "").slice(-4);
     mostrarSucesso(r.codigo_reserva, `Valor de ${brl(pedido.total)} pré-autorizado no cartão final ${f}. Enviamos a confirmação para o seu e-mail.`, r.link_checkin);
+    window.rastreio?.evento("Purchase", { valor: pedido.total, eventId: r.codigo_reserva, rotuloGoogle: "google_compra" });
   } catch (err) { $("#erroCartao").textContent = err.message; }
   b.disabled = false;
 });
@@ -235,6 +237,7 @@ $("#btnSimularPix").addEventListener("click", async () => {
   try {
     const r = await api("/pix/simular", {});
     mostrarSucesso(r.codigo_reserva, `Pagamento de ${brl(pedido.total)} por Pix recebido. Enviamos a confirmação para o seu e-mail.`, r.link_checkin);
+    window.rastreio?.evento("Purchase", { valor: pedido.total, eventId: r.codigo_reserva, rotuloGoogle: "google_compra" });
   } catch (err) { $("#erroPix2").textContent = err.message; }
   b.disabled = false;
 });

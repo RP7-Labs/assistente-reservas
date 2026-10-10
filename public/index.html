@@ -79,11 +79,13 @@
     <button aria-label="Enviar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></button>
   </form>
 </section>
+<script src="/rastreio.js"></script>
 <script>
 const ICONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>';
 const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>';
 const MENU = [["Fazer uma reserva"], ["Ver quartos e preços"], ["Dúvidas sobre o hotel"], ["Falar com atendente"]].map(([r]) => ({ rotulo: r, texto: r }));
 let id = novoId();
+let origemEnviada = null; // a origem da campanha vai só na primeira mensagem de cada conversa
 const log = document.getElementById("log"), t = document.getElementById("t"), caixa = document.getElementById("opcoes");
 let ultimoAutor = null;
 
@@ -141,7 +143,8 @@ async function enviar(texto, mostrar) {
   add("eu", mostrar);
   digitando(true);
   try {
-    const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversaId: id, texto }) });
+    const r = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversaId: id, texto, origem: origemEnviada === id ? undefined : window.rastreio?.origem() }) });
+    origemEnviada = id;
     const j = await r.json();
     await new Promise((ok) => setTimeout(ok, 350));
     digitando(false);
@@ -154,6 +157,7 @@ async function enviar(texto, mostrar) {
     }
     add("bot", resposta);
     links.forEach(cardReserva);
+    if (links.length) window.rastreio?.evento("Lead", { eventId: `lead-${links[0].lead_id}`, rotuloGoogle: "google_lead" });
     if ((j.eventos || []).some((e) => e.tipo === "atendente")) aviso("Um atendente foi chamado e vai responder por aqui");
     mostrarOpcoes(j.opcoes || []);
   } catch {
