@@ -1,4 +1,5 @@
-// Checkout simulado: cartão com pré-autorização e Pix. Nada é cobrado de verdade.
+// Checkout próprio: cartão com pré-autorização e Pix. Com as chaves da Getnet cobra de verdade
+// (src/getnet.js); sem elas, tudo é simulado e nada é cobrado.
 import crypto from "node:crypto";
 import express from "express";
 import { carregarHotel } from "./catalogo.js";
@@ -9,6 +10,7 @@ import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
 import { garantirCheckin, textoLinkCheckin, linkCheckin } from "./checkin.js";
 import { enviarMeta } from "./rastreio.js";
+import * as getnet from "./getnet.js";
 
 export const MINUTOS_LEMBRETE = 5;
 // Cartão de teste que sempre é recusado
@@ -87,7 +89,7 @@ const reais = (v) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDi
 
 // Confirma a reserva depois do pagamento aprovado e avisa o hóspede por e-mail
 const pessoas = (r) => `${r.adultos} adulto${r.adultos > 1 ? "s" : ""}${r.criancas ? ` e ${r.criancas} criança${r.criancas > 1 ? "s" : ""}` : ""}`;
-const AVISO_TESTE = "\n\n(Ambiente de testes: nenhum valor foi cobrado de verdade.)";
+const avisoTeste = (pag) => (pag?.provedor === "getnet" && getnet.configGetnet()?.ambiente === "producao" ? "" : "\n\n(Ambiente de testes: nenhum valor foi cobrado de verdade.)");
 
 // E-mails ao hóspede sobre o pagamento: pix pago, cartão pré-autorizado, capturado ou liberado
 export async function emailPagamento(hotel, lead, pag, evento) {
@@ -105,7 +107,7 @@ export async function emailPagamento(hotel, lead, pag, evento) {
   if (!m) return;
   await enviarEmail({
     para: pag.email, tipo: `pagamento_${evento}`, leadId: lead.id, assunto: `${m[0]} – ${hotel.nome}`,
-    texto: `Olá, ${pag.nome}!\n\n${m[1]}\n\nCódigo da reserva: ${pag.codigo_reserva}\nValor: ${reais(r.total)}\n\n${hotel.nome}${AVISO_TESTE}`,
+    texto: `Olá, ${pag.nome}!\n\n${m[1]}\n\nCódigo da reserva: ${pag.codigo_reserva}\nValor: ${reais(r.total)}\n\n${hotel.nome}${avisoTeste(pag)}`,
   });
 }
 
@@ -116,12 +118,12 @@ async function emailReserva(hotel, lead, pag, ck, base) {
   await enviarEmail({
     para: pag.email, tipo: "reserva_confirmada", leadId: lead.id,
     assunto: `Reserva ${pag.codigo_reserva} confirmada – ${hotel.nome}`,
-    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkCheckin(base, ck.token)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${AVISO_TESTE}`,
+    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkCheckin(base, ck.token)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${avisoTeste(pag)}`,
   });
 }
 
 // Confirma a reserva depois do pagamento aprovado e manda os dois e-mails: pagamento e reserva
-async function confirmar(hotel, lead, pag, campos, base) {
+export async function confirmar(hotel, lead, pag, campos, base) {
   const codigo = pag.codigo_reserva || `P-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
   const r = resumoPedido(hotel, lead);
   await salvarReserva({
@@ -189,7 +191,10 @@ pagamento.get("/:lead", rota(async (req, res) => {
   if (!c) return;
   const { lead, pag, hotel } = c;
   const p = pag && { status: pag.status, metodo: pag.metodo, nome: pag.nome, email: pag.email, codigo_reserva: pag.codigo_reserva, cartao_final: pag.cartao_final, cartao_bandeira: pag.cartao_bandeira };
-  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
+  // O link do pré-check-in aparece na tela quando a confirmação chega pela notificação da Getnet
+  const ck = pag?.codigo_reserva && FINAIS.has(pag.status) ? await garantirCheckin(pag.codigo_reserva).catch(() => null) : null;
+  if (p && ck) p.link_checkin = linkCheckin(urlBase(req), ck.token);
+  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
 }));
 
 // Passo 1: dados do hóspede. Começa a contar os minutos para o lembrete por e-mail.
@@ -216,40 +221,129 @@ async function prontoParaPagar(c, res) {
   return true;
 }
 
-// Cartão: pré-autoriza o valor total (fica retido até o hotel capturar ou liberar)
+// Cartão (simulado): pré-autoriza o valor total (fica retido até o hotel capturar ou liberar)
 pagamento.post("/:lead/cartao", rota(async (req, res) => {
   const c = await carregar(req, res);
   if (!c || !(await prontoParaPagar(c, res))) return;
+  // Com a Getnet o número do cartão nunca chega aqui: ele é digitado no checkout da própria Getnet
+  if (getnet.configGetnet()) return res.status(400).json({ erro: "Use o formulário seguro do cartão." });
   const v = validarCartao(req.body ?? {});
   if (!v.ok) {
     if (v.recusado) await salvarPagamento({ ...c.pag, metodo: "cartao", status: "pendente" });
     return res.status(402).json({ erro: v.erro });
   }
   const pag = await confirmar(c.hotel, c.lead, c.pag, {
-    metodo: "cartao", status: "pre_autorizado", cartao_final: v.final, cartao_bandeira: v.bandeira,
+    metodo: "cartao", status: "pre_autorizado", provedor: "simulado", cartao_final: v.final, cartao_bandeira: v.bandeira,
     autorizacao: crypto.randomBytes(3).toString("hex").toUpperCase(),
   }, urlBase(req));
   res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
 }));
 
-// Pix: gera a cobrança (simulada)
+// Cartão (Getnet): devolve os dados para a página abrir o Checkout Iframe da Getnet
+pagamento.post("/:lead/cartao/getnet", rota(async (req, res) => {
+  const c = await carregar(req, res);
+  if (!c || !(await prontoParaPagar(c, res))) return;
+  const cfg = getnet.configGetnet();
+  if (!cfg) return res.status(400).json({ erro: "Pagamento com cartão indisponível." });
+  const r = resumoPedido(c.hotel, c.lead);
+  await salvarPagamento({ ...c.pag, metodo: "cartao", provedor: "getnet" });
+  res.json(await getnet.configIframe({ pedidoId: c.lead.id, valor: r.total, pag: c.pag, hotel: c.hotel, descricao: `${r.quarto} ${br(r.checkin)} a ${br(r.checkout)}` }, cfg));
+}));
+
+// Pix: gera a cobrança (Getnet ou simulada)
 pagamento.post("/:lead/pix", rota(async (req, res) => {
   const c = await carregar(req, res);
   if (!c || !(await prontoParaPagar(c, res))) return;
-  const txid = c.pag.pix_txid || `SIM${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
   const valor = resumoPedido(c.hotel, c.lead).total;
-  await salvarPagamento({ ...c.pag, metodo: "pix", pix_txid: txid });
+  const cfg = getnet.configGetnet();
+  if (cfg) {
+    // Reaproveita o QR Code enquanto ele vale (com 2 minutos de folga)
+    const p = c.pag;
+    if (p.provedor === "getnet" && p.metodo === "pix" && p.pix_copia_cola && p.pix_expira_em && Date.parse(p.pix_expira_em) - Date.now() > 120_000) {
+      return res.json({ txid: p.gateway_id, valor, copia_e_cola: p.pix_copia_cola, expira_em_min: Math.floor((Date.parse(p.pix_expira_em) - Date.now()) / 60_000), real: true });
+    }
+    const tentativa = (p.tentativas_pix ?? 0) + 1;
+    let pix;
+    try {
+      pix = await getnet.criarPix({ pedidoId: c.lead.id, valor, clienteId: p.email, tentativa }, cfg);
+    } catch (err) {
+      console.error(err.message);
+      return res.status(502).json({ erro: "Não foi possível gerar o Pix agora. Tente de novo em instantes." });
+    }
+    const expira = pix.expiraEm && !Number.isNaN(Date.parse(pix.expiraEm)) ? new Date(pix.expiraEm) : new Date(Date.now() + 30 * 60_000);
+    await salvarPagamento({ ...p, metodo: "pix", provedor: "getnet", gateway_id: pix.paymentId, pix_txid: pix.paymentId, pix_copia_cola: pix.copiaECola, pix_expira_em: expira.toISOString(), tentativas_pix: tentativa, gateway_status: pix.status ?? null });
+    return res.json({ txid: pix.paymentId, valor, copia_e_cola: pix.copiaECola, expira_em_min: Math.max(1, Math.floor((expira - Date.now()) / 60_000)), real: true });
+  }
+  const txid = c.pag.pix_txid || `SIM${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+  await salvarPagamento({ ...c.pag, metodo: "pix", provedor: "simulado", pix_txid: txid });
   res.json({ txid, valor, copia_e_cola: pixFake(txid, valor, c.hotel), expira_em_min: 30 });
 }));
 
-// Pix: simula a confirmação do banco
+// Pix: simula a confirmação do banco (só no checkout simulado)
 pagamento.post("/:lead/pix/simular", rota(async (req, res) => {
+  if (getnet.configGetnet()) return res.status(404).json({ erro: "Indisponível" });
   const c = await carregar(req, res);
   if (!c || !(await prontoParaPagar(c, res))) return;
   if (!c.pag.pix_txid) return res.status(400).json({ erro: "Gere o Pix primeiro." });
   const pag = await confirmar(c.hotel, c.lead, c.pag, { metodo: "pix", status: "pago" }, urlBase(req));
   res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
 }));
+
+// Notificação da Getnet (GET com os dados na query). A Getnet não assina a notificação, então:
+// a URL tem um segredo, e vendedor, pedido e valor precisam bater com o que está no banco.
+// Responde 200 sempre que a notificação foi entendida, para a Getnet não reenviar.
+export async function tratarNotificacaoGetnet(query, base) {
+  const cfg = getnet.configGetnet();
+  const n = getnet.lerNotificacao(query);
+  if (!cfg || !n.pedidoId) return { ok: false, motivo: "sem pedido" };
+  if (n.sellerId && n.sellerId !== cfg.seller) return { ok: false, motivo: "vendedor diferente" };
+  const lead = await buscarLead(n.pedidoId);
+  const pag = lead && (await buscarPagamento(lead.id));
+  if (!lead || !pag) return { ok: false, motivo: "pedido desconhecido" };
+  const esperado = getnet.centavos(pag.valor ?? resumoPedido(carregarHotel(), lead).total);
+  // Valor em centavos (padrão da API) ou em reais
+  if (n.valor != null && n.valor !== esperado && getnet.centavos(n.valor) !== esperado) return { ok: false, motivo: "valor diferente" };
+  if (pag.gateway_id && n.paymentId && n.metodo === "pix" && pag.gateway_id !== n.paymentId) return { ok: false, motivo: "pagamento diferente" };
+  const hotel = carregarHotel();
+  const registro = { provedor: "getnet", gateway_status: n.status, ...(n.paymentId ? { gateway_id: n.paymentId } : {}) };
+  if (!n.novo || pag.status === n.novo) {
+    await salvarPagamento({ ...pag, ...registro });
+    return { ok: true, status: pag.status };
+  }
+  if (n.novo === "pago" || n.novo === "pre_autorizado") {
+    if (FINAIS.has(pag.status)) return { ok: true, status: pag.status };
+    const campos = { ...registro, metodo: n.metodo, status: n.novo, ...(n.metodo === "cartao" ? { cartao_bandeira: n.bandeira, autorizacao: n.autorizacao } : {}) };
+    const salvo = await confirmar(hotel, lead, pag, campos, base);
+    return { ok: true, status: salvo.status };
+  }
+  if (n.novo === "recusado") {
+    if (!FINAIS.has(pag.status)) await salvarPagamento({ ...pag, ...registro, status: "pendente" });
+    return { ok: true, status: "pendente" };
+  }
+  // Captura ou cancelamento feitos pelo painel da Getnet: só acompanha o status
+  if (pag.status === "pre_autorizado" && ["capturado", "liberado"].includes(n.novo)) {
+    const salvo = await salvarPagamento({ ...pag, ...registro, status: n.novo });
+    await emailPagamento(hotel, lead, salvo, salvo.status);
+    return { ok: true, status: n.novo };
+  }
+  await salvarPagamento({ ...pag, ...registro });
+  return { ok: true, status: pag.status };
+}
+
+pagamento.get("/getnet/notificacao/:segredo", rota(async (req, res) => {
+  if (!getnet.segredoConfere(req.params.segredo)) return res.status(404).end();
+  const r = await tratarNotificacaoGetnet(req.query, urlBase(req));
+  if (!r.ok) console.error("Getnet notificação ignorada:", r.motivo, req.query.order_id ?? "");
+  res.status(200).json({ ok: r.ok });
+}));
+
+// Captura ou libera a pré-autorização na Getnet (chamado pelo back-office). Simulado: não faz nada.
+export async function acaoGetnet(pag, acao) {
+  if (pag.provedor !== "getnet") return null;
+  if (!pag.gateway_id) throw new Error("Pagamento sem o id da Getnet");
+  const args = { pedidoId: pag.lead_id, paymentId: pag.gateway_id, valor: pag.valor };
+  return acao === "capturar" ? getnet.capturarCartao(args) : getnet.cancelarCartao(args);
+}
 
 // Tarefa agendada: lembretes por e-mail. Protegida por CRON_SECRET.
 export async function rotaLembretes(req, res) {

@@ -89,6 +89,15 @@
       <p class="dica">O valor fica reservado no limite do cartão e só é cobrado pelo hotel. Se a reserva for cancelada, o limite é liberado.</p>
     </form>
 
+    <div id="areaCartaoGetnet" hidden>
+      <p class="mut" style="margin-top:0">Os dados do cartão são digitados no ambiente seguro da Getnet (Santander). O hotel não vê nem guarda o número do cartão.</p>
+      <div class="erro" id="erroGetnet"></div>
+      <button type="button" id="btnGetnet">Pagar com cartão</button>
+      <p class="dica">O valor fica reservado no limite do cartão e só é cobrado pelo hotel. Se a reserva for cancelada, o limite é liberado.</p>
+      <p class="dica" id="aguardandoCartao" hidden>Confirmando o pagamento com a Getnet…</p>
+      <div id="getnetLoader"></div>
+    </div>
+
     <div id="areaPix" hidden>
       <div id="pixInicio">
         <p class="mut" style="margin-top:0">Pague com Pix e a reserva é confirmada na hora.</p>
@@ -99,7 +108,8 @@
         <div id="qr"></div>
         <label>Pix copia e cola <textarea id="pixCodigo" rows="4" readonly></textarea></label>
         <button type="button" class="sec" id="btnCopiar">Copiar código</button>
-        <p class="dica">Modo de teste: não pague este código. Use o botão abaixo para simular o pagamento recebido.</p>
+        <p class="dica" id="dicaPixTeste">Modo de teste: não pague este código. Use o botão abaixo para simular o pagamento recebido.</p>
+        <p class="dica" id="dicaPixReal" hidden>Pague no app do seu banco. Esta página confirma sozinha assim que o pagamento chegar.</p>
         <div class="erro" id="erroPix2"></div>
         <button type="button" id="btnSimularPix">Simular pagamento recebido</button>
       </div>
@@ -123,7 +133,7 @@ const lead = new URLSearchParams(location.search).get("lead");
 const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const br = (d) => d.split("-").reverse().join("/");
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-let pedido;
+let pedido, provedor = "simulado", vigia = null;
 
 async function api(caminho, corpo) {
   const r = await fetch(`/api/pagamento/${encodeURIComponent(lead)}${caminho}`, corpo ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) } : {});
@@ -161,6 +171,8 @@ async function iniciar() {
   try {
     const d = await api("");
     pedido = d.pedido;
+    provedor = d.provedor || "simulado";
+    if (provedor === "getnet") { $("#formCartao").hidden = true; $("#areaCartaoGetnet").hidden = false; }
     mostrarResumo(pedido);
     const pg = d.pagamento;
     if (pg && ["pre_autorizado", "capturado", "pago"].includes(pg.status)) return mostrarSucesso(pg.codigo_reserva, detalheDe(pg));
@@ -187,7 +199,8 @@ $("#passoDados").addEventListener("submit", async (e) => {
 
 document.querySelectorAll("[data-metodo]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("[data-metodo]").forEach((x) => x.classList.toggle("ativo", x === b));
-  $("#formCartao").hidden = b.dataset.metodo !== "cartao";
+  $("#formCartao").hidden = provedor === "getnet" || b.dataset.metodo !== "cartao";
+  $("#areaCartaoGetnet").hidden = provedor !== "getnet" || b.dataset.metodo !== "cartao";
   $("#areaPix").hidden = b.dataset.metodo !== "pix";
 }));
 
@@ -226,7 +239,62 @@ $("#btnGerarPix").addEventListener("click", async () => {
     $("#qr").hidden = !window.QRCode;
     if (window.QRCode) new QRCode($("#qr"), { text: r.copia_e_cola, width: 200, height: 200 });
     $("#pixInicio").hidden = true; $("#pixGerado").hidden = false;
+    if (r.real) {
+      $("#btnSimularPix").hidden = true; $("#dicaPixTeste").hidden = true; $("#dicaPixReal").hidden = false;
+      aguardarConfirmacao();
+    }
   } catch (err) { $("#erroPix").textContent = err.message; }
+});
+
+// Pagamento real: quem confirma é a notificação da Getnet no servidor; a página só acompanha o status
+function aguardarConfirmacao(ate = Date.now() + 30 * 60_000) {
+  clearTimeout(vigia);
+  const verificar = async () => {
+    try {
+      const d = await api("");
+      const pg = d.pagamento;
+      if (pg && ["pre_autorizado", "capturado", "pago"].includes(pg.status)) {
+        mostrarSucesso(pg.codigo_reserva, detalheDe(pg), pg.link_checkin);
+        window.rastreio?.evento("Purchase", { valor: pedido.total, eventId: pg.codigo_reserva, rotuloGoogle: "google_compra" });
+        return;
+      }
+    } catch { /* tenta de novo */ }
+    if (Date.now() < ate) vigia = setTimeout(verificar, 4000);
+    else $("#aguardandoCartao").textContent = "Ainda não recebemos a confirmação. Se o valor foi aprovado no seu banco, a reserva será confirmada por e-mail.";
+  };
+  vigia = setTimeout(verificar, 3000);
+}
+
+// Cartão pela Getnet: o servidor devolve os atributos do Checkout Iframe e a página carrega o script da Getnet
+$("#btnGetnet").addEventListener("click", async () => {
+  const b = $("#btnGetnet"); b.disabled = true; $("#erroGetnet").textContent = "";
+  try {
+    const cfg = await api("/cartao/getnet", {});
+    const caixa = $("#getnetLoader"); caixa.innerHTML = "";
+    const s = document.createElement("script");
+    s.async = true; s.src = cfg.loader;
+    for (const [k, v] of Object.entries(cfg.atributos)) s.setAttribute(k, v);
+    s.onload = () => setTimeout(() => document.querySelector("." + cfg.atributos["data-getnet-button-class"])?.click(), 300);
+    s.onerror = () => { $("#erroGetnet").textContent = "Não foi possível abrir o pagamento com cartão. Tente o Pix."; b.disabled = false; };
+    caixa.appendChild(s);
+  } catch (err) { $("#erroGetnet").textContent = err.message; b.disabled = false; }
+});
+
+window.addEventListener("message", (e) => {
+  let host = ""; try { host = new URL(e.origin).hostname; } catch { return; }
+  if (!/\.getnet\.com\.br$/.test(host)) return;
+  let d = e.data;
+  try { if (typeof d === "string") d = JSON.parse(d); } catch { return; }
+  const st = d?.status;
+  if (st === "success" || st === "pending") {
+    $("#aguardandoCartao").hidden = false;
+    aguardarConfirmacao(Date.now() + 10 * 60_000);
+  } else if (st === "error") {
+    $("#erroGetnet").textContent = "Pagamento não aprovado. Confira os dados ou tente outro cartão.";
+    $("#btnGetnet").disabled = false;
+  } else if (st === "close") {
+    $("#btnGetnet").disabled = false;
+  }
 });
 $("#btnCopiar").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("#pixCodigo").value); $("#btnCopiar").textContent = "Código copiado"; }

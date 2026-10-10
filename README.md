@@ -50,7 +50,7 @@ Sem `ANTHROPIC_API_KEY`, o chat funciona por regras (`src/regras.js`), sem custo
 
 No modo por regras, citar um feriado ou período ("natal", "réveillon", "carnaval", "semana santa", "corpus christi", "tiradentes", "finados", "fim de semana"...) faz o assistente sugerir 2 ou 3 opções de entrada e saída. No chat web elas viram botões; no WhatsApp, o hóspede responde com o número. Carnaval, Páscoa e Corpus Christi são calculados a partir da data da Páscoa; feriados fixos emendam com o fim de semana (`src/periodos.js`).
 
-## Checkout de pagamento (simulado)
+## Checkout de pagamento (simulado ou Getnet)
 
 O link do chat (`/r/:id`) leva para `/pagamento`, onde o hóspede confirma os dados e paga:
 
@@ -58,6 +58,14 @@ O link do chat (`/r/:id`) leva para `/pagamento`, onde o hóspede confirma os da
 - **Pix**: gera um código copia e cola de teste e um botão "Simular pagamento recebido".
 
 Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda dois e-mails: pagamento confirmado (ou pré-autorização aprovada, no cartão) e reserva confirmada. Capturar o cartão manda "pagamento confirmado"; liberar manda o aviso de cancelamento. `CHECKOUT_MODO=motor` volta a mandar o link para o motor de reservas.
+
+**Getnet (cobrança real):** com `GETNET_CLIENT_ID`, `GETNET_CLIENT_SECRET` e `GETNET_SELLER_ID` (credenciais da API v2, pedidas ao gerente Getnet/Santander) o checkout passa a cobrar de verdade. Rode `db/009_getnet.sql`.
+
+- **Cartão**: abre o Checkout Iframe da Getnet. O número do cartão é digitado no ambiente da Getnet e nunca passa pelo nosso servidor (fica fora do escopo PCI). Usa pré-autorização (`GETNET_PRE_AUTORIZACAO=0` cobra direto). Capturar/liberar no back-office chama a Getnet.
+- **Pix**: QR Code gerado pela API da Getnet, válido por 30 minutos. A página confirma sozinha quando o pagamento chega.
+- **Confirmação**: só pela notificação da Getnet, nunca pelo navegador. Defina `GETNET_SEGREDO_NOTIFICACAO` (texto longo aleatório) e peça ao suporte da Getnet para cadastrar as URLs de notificação de Pix e de cartão como `https://SEU-DOMINIO/api/pagamento/getnet/notificacao/<segredo>`. Vendedor, pedido e valor são conferidos com o banco.
+- `GETNET_AMBIENTE`: `sandbox`, `homologacao` (padrão) ou `producao`. `GETNET_CANAL` é o código do header `x-transaction-channel-entry`, se a Getnet exigir. Cartões de teste: 5155 9012 2228 0001 aprova; 5155 9012 2223 0006 recusa.
+- Os e-mails só deixam de dizer "ambiente de testes" com `GETNET_AMBIENTE=producao`.
 
 **Lembrete por e-mail:** quem preenche os dados e não paga em 5 minutos recebe o link de pagamento por e-mail (uma vez).
 

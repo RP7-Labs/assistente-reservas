@@ -17,7 +17,7 @@ import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
 import { fonte, csvGoogleAds, configMeta, configPublica } from "./rastreio.js";
 import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
 import { modoEmail, enviarEmail } from "./email.js";
-import { emailPagamento } from "./pagamento.js";
+import { emailPagamento, acaoGetnet } from "./pagamento.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
@@ -238,6 +238,12 @@ admin.post("/pagamentos/:lead/:acao", rota(async (req, res) => {
   const pag = await buscarPagamento(req.params.lead);
   if (!pag) return res.status(404).json({ erro: "Pagamento não encontrado" });
   if (pag.status !== "pre_autorizado") return res.status(409).json({ erro: "Só pré-autorizações podem ser capturadas ou liberadas" });
+  try {
+    await acaoGetnet(pag, acao);
+  } catch (err) {
+    console.error(err);
+    return res.status(502).json({ erro: `A Getnet não aceitou: ${err.message}` });
+  }
   const salvo = await salvarPagamento({ ...pag, status: acao === "capturar" ? "capturado" : "liberado" });
   if (acao === "liberar" && pag.codigo_reserva) {
     await atualizarStatusReserva(pag.codigo_reserva, "cancelada");

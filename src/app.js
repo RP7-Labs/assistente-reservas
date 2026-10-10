@@ -5,6 +5,7 @@ import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js"
 import { rotasWhatsapp } from "./whatsapp.js";
 import { admin } from "./admin.js";
 import { pagamento, rotaLembretes } from "./pagamento.js";
+import { configGetnet } from "./getnet.js";
 import { modoEmail } from "./email.js";
 import { calendarioExportado, sincronizarCanais } from "./canais.js";
 import { checkin } from "./checkin.js";
@@ -43,7 +44,12 @@ app.get("/api/health", async (_req, res) => {
       ia: { nome: "ia", estado: "ok", detalhe: "Claude configurado" },
     }[modoAssistente()],
     config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
-    { nome: "pagamento", estado: "pendente", detalhe: "checkout simulado (cartão pré-autorizado e Pix de teste)" },
+    (() => {
+      const g = configGetnet();
+      if (!g) return { nome: "pagamento", estado: "pendente", detalhe: "checkout simulado (falta GETNET_CLIENT_ID, GETNET_CLIENT_SECRET, GETNET_SELLER_ID)" };
+      if (!g.notificacao) return { nome: "pagamento", estado: "erro", detalhe: "Getnet sem GETNET_SEGREDO_NOTIFICACAO: os pagamentos não são confirmados" };
+      return { nome: "pagamento", estado: "ok", detalhe: `Getnet (${g.ambiente})` };
+    })(),
     modoEmail() === "resend"
       ? { nome: "email", estado: "ok", detalhe: "envio pela Resend" }
       : { nome: "email", estado: "pendente", detalhe: "simulado: e-mails ficam no back-office (falta RESEND_API_KEY, EMAIL_FROM)" },
