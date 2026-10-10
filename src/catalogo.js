@@ -1,9 +1,75 @@
 import fs from "node:fs";
 // Import estático para o arquivo entrar no pacote da Vercel
 import hotelPadrao from "../data/hotel.json" with { type: "json" };
+import { hotelId, rodarNoHotel, HOTEL_PADRAO } from "./tenant.js";
+import { comPadroesDoPais } from "./paises.js";
+import { buscarHotelRegistro, listarHoteis } from "./store.js";
 
-export function carregarHotel(arquivo = process.env.HOTEL_FILE) {
-  return arquivo ? JSON.parse(fs.readFileSync(arquivo, "utf8")) : hotelPadrao;
+// Configuração de cada hotel: catálogo (quartos, políticas), país, idioma, moeda, fuso e ids de integração.
+// Vem da tabela hoteis; o hotel padrão parte de data/hotel.json (ou HOTEL_FILE) e o cadastro sobrescreve.
+const cache = new Map();
+const VALIDADE_MS = 60_000;
+
+const arquivoPadrao = () => (process.env.HOTEL_FILE ? JSON.parse(fs.readFileSync(process.env.HOTEL_FILE, "utf8")) : hotelPadrao);
+
+function montar(id, registro) {
+  const base = id === HOTEL_PADRAO ? arquivoPadrao() : { quartos: [], politicas: "", checkin: "14:00", checkout: "12:00" };
+  const { config = {}, dominios, ativo, criado_em, atualizado_em, ...colunas } = registro ?? {};
+  const limpo = Object.fromEntries(Object.entries(colunas).filter(([, v]) => v != null && v !== ""));
+  return comPadroesDoPais({ ...base, ...config, ...limpo, id, ativo: ativo ?? true, dominios: dominios ?? [] });
+}
+
+// Carrega (com cache curto) a configuração do hotel. Devolve null se o hotel não existe.
+export async function prepararHotel(id = hotelId()) {
+  const c = cache.get(id);
+  if (c && c.ate > Date.now()) return c.hotel;
+  const registro = await buscarHotelRegistro(id).catch(() => null);
+  if (!registro && id !== HOTEL_PADRAO) return null;
+  const hotel = montar(id, registro);
+  cache.set(id, { hotel, ate: Date.now() + VALIDADE_MS });
+  return hotel;
+}
+export const limparCacheHoteis = () => { cache.clear(); lista = { hoteis: null, ate: 0 }; };
+
+// Roda fn dentro do hotel, com a configuração já carregada
+export async function noHotel(id, fn) {
+  return rodarNoHotel(id, async () => {
+    await prepararHotel(id);
+    return fn();
+  });
+}
+
+// Lista de hotéis cadastrados (cache curto), para achar o hotel por domínio ou por id de integração
+let lista = { hoteis: null, ate: 0 };
+async function hoteisCadastrados() {
+  if (lista.hoteis && lista.ate > Date.now()) return lista.hoteis;
+  const hoteis = await listarHoteis().catch(() => []);
+  lista = { hoteis, ate: Date.now() + VALIDADE_MS };
+  return hoteis;
+}
+export const limparCacheLista = () => { lista = { hoteis: null, ate: 0 }; };
+
+export async function hotelDoDominio(host) {
+  const h = String(host ?? "").toLowerCase();
+  return (await hoteisCadastrados()).find((x) => x.ativo !== false && (x.dominios ?? []).includes(h))?.id ?? null;
+}
+
+// Hotel dono de um número de WhatsApp, página da Meta etc. (campo em config.integracoes)
+export async function hotelPorIntegracao(campo, valor) {
+  if (!valor) return null;
+  return (await hoteisCadastrados()).find((x) => String(x.config?.integracoes?.[campo] ?? "") === String(valor))?.id ?? null;
+}
+
+// Hotéis ativos, para as tarefas agendadas (o padrão sempre entra)
+export async function hoteisAtivos() {
+  const ids = (await hoteisCadastrados()).filter((x) => x.ativo !== false).map((x) => x.id);
+  return [HOTEL_PADRAO, ...ids.filter((id) => id !== HOTEL_PADRAO)];
+}
+
+// Configuração do hotel atual (síncrona: o middleware e noHotel já carregaram)
+export function carregarHotel() {
+  const id = hotelId();
+  return cache.get(id)?.hotel ?? montar(id, null);
 }
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;

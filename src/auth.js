@@ -27,8 +27,9 @@ function segredo() {
 const assinar = (dados) => crypto.createHmac("sha256", segredo()).update(dados).digest("base64url");
 
 // Token de sessão: <payload base64url>.<assinatura HMAC>
-export function criarToken(adminId, agora = Date.now()) {
-  const payload = Buffer.from(JSON.stringify({ id: adminId, exp: agora + VALIDADE_MS })).toString("base64url");
+// h = hotel do admin (multi-tenant)
+export function criarToken(adminId, agora = Date.now(), hotel = undefined) {
+  const payload = Buffer.from(JSON.stringify({ id: adminId, h: hotel, exp: agora + VALIDADE_MS })).toString("base64url");
   return `${payload}.${assinar(payload)}`;
 }
 

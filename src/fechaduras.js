@@ -2,8 +2,9 @@
 // Sem as variáveis TTLOCK_*, as senhas são simuladas: geradas e guardadas aqui, sem falar com a fechadura.
 // Para a senha chegar à fechadura pela internet, ela precisa estar ligada a um gateway Wi-Fi da TTLock.
 import crypto from "node:crypto";
+import { envDoHotel } from "./tenant.js";
 
-export function configTTLock(env = process.env) {
+export function configTTLock(env = envDoHotel()) {
   const { TTLOCK_CLIENT_ID: clientId, TTLOCK_CLIENT_SECRET: segredo, TTLOCK_USERNAME: usuario, TTLOCK_PASSWORD: senha } = env;
   if (!clientId || !segredo || !usuario || !senha) return null;
   return { url: (env.TTLOCK_API || "https://euapi.ttlock.com").replace(/\/$/, ""), clientId, segredo, usuario, senha };

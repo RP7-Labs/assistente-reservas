@@ -4,13 +4,14 @@
 // Google Ads: tag do navegador na página de pagamento e um CSV de conversões offline pelo gclid.
 import crypto from "node:crypto";
 import { buscarOrigem, salvarOrigem, registrarConversao, buscarConversao, buscarLead } from "./store.js";
+import { envDoHotel } from "./tenant.js";
 
 const CAMPOS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "gbraid", "wbraid", "fbclid", "fbp", "ctwa_clid", "ad_id"];
 // meta_lead_id não vem do navegador: só o webhook de leads grava (src/leadsMeta.js)
 const limpar = (v, max = 200) => (v == null ? null : String(v).trim().slice(0, max) || null);
 
 // Configuração pública (vai para o navegador): IDs, nunca tokens
-export function configPublica(env = process.env) {
+export function configPublica(env = envDoHotel()) {
   return {
     meta_pixel: env.META_DATASET_ID || null,
     google_ads: env.GOOGLE_ADS_ID || null,                 // AW-123456789
@@ -73,7 +74,7 @@ export function fonte(o) {
 const sha256 = (v) => crypto.createHash("sha256").update(String(v).trim().toLowerCase()).digest("hex");
 const telefoneE164 = (t) => { const d = String(t ?? "").replace(/\D/g, ""); return d.length >= 10 && d.length <= 11 ? `55${d}` : d; };
 
-export function configMeta(env = process.env) {
+export function configMeta(env = envDoHotel()) {
   if (!env.META_DATASET_ID || !env.META_CAPI_TOKEN) return null;
   return { dataset: env.META_DATASET_ID, token: env.META_CAPI_TOKEN, versao: env.META_API_VERSION || "v21.0", teste: env.META_TEST_EVENT_CODE || null, waba: env.META_WABA_ID || null };
 }

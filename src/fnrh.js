@@ -3,13 +3,16 @@
 // Sem FNRH_USUARIO/FNRH_SENHA/FNRH_CPF_SOLICITANTE, nada é enviado: a ficha fica marcada como "simulado".
 import { carregarHotel } from "./catalogo.js";
 import { buscarCheckin, salvarCheckin, listarCheckins, buscarReserva } from "./store.js";
+import { envDoHotel } from "./tenant.js";
 
 const URLS = {
   producao: "https://fnrh.turismo.serpro.gov.br/FNRH_API/rest/v2",
   homologacao: "https://homlowcode.serpro.gov.br/FNRH_API/rest/v2",
 };
 
-export function configFNRH(env = process.env) {
+export function configFNRH(env = envDoHotel(), pais = carregarHotel().pais) {
+  // A FNRH Digital é do Brasil; hotéis de outros países não enviam ficha
+  if (pais && pais !== "BR") return null;
   const { FNRH_USUARIO: usuario, FNRH_SENHA: senha, FNRH_CPF_SOLICITANTE: cpf } = env;
   if (!usuario || !senha || !cpf) return null;
   const ambiente = env.FNRH_AMBIENTE === "producao" ? "producao" : "homologacao";

@@ -1,11 +1,12 @@
 import express from "express";
 import { responder, modoAssistente } from "./assistente.js";
-import { carregarHotel, montarLinkMotor } from "./catalogo.js";
-import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
+import { carregarHotel, montarLinkMotor, noHotel, prepararHotel, hotelDoDominio, hoteisAtivos } from "./catalogo.js";
+import { HOTEL_PADRAO, SLUG_RE } from "./tenant.js";
+import { buscarLead, registrarClique, resumo, verificarBanco, localizarHotel } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
 import { rotasLeadsMeta, modoLeadsMeta } from "./leadsMeta.js";
 import { admin } from "./admin.js";
-import { pagamento, rotaLembretes } from "./pagamento.js";
+import { pagamento, rotaLembretes, enviarLembretes } from "./pagamento.js";
 import { configGetnet } from "./getnet.js";
 import { modoEmail } from "./email.js";
 import { calendarioExportado, sincronizarCanais } from "./canais.js";
@@ -17,6 +18,24 @@ import { configPublica, normalizarOrigem, registrarOrigem } from "./rastreio.js"
 export const app = express();
 // Guarda o corpo bruto para conferir a assinatura dos webhooks da Meta
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+// Hotel do pedido: cabeçalho X-Hotel ou ?hotel=<id>, domínio cadastrado no hotel, ou o hotel padrão.
+// Links com id próprio (pagamento, check-in, calendário) acham o hotel pelo id, mais abaixo.
+app.use(async (req, res, next) => {
+  try {
+    const pedido = String(req.get("x-hotel") ?? req.query.hotel ?? "").trim().toLowerCase();
+    let id = HOTEL_PADRAO;
+    if (pedido) {
+      if (!SLUG_RE.test(pedido) || !(await prepararHotel(pedido))) return res.status(404).json({ erro: "Hotel não encontrado" });
+      id = pedido;
+    } else {
+      id = (await hotelDoDominio(req.hostname)) ?? HOTEL_PADRAO;
+    }
+    await noHotel(id, () => next());
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Mostra o que já está configurado, sem expor valores
 app.get("/api/status", (_req, res) => {
@@ -92,6 +111,17 @@ app.post("/api/chat", async (req, res) => {
 // Link rastreável: conta o clique e redireciona para o motor de reservas
 app.get("/r/:id", async (req, res) => {
   try {
+    const hotelDoLead = await localizarHotel("leads", "id", req.params.id);
+    if (!hotelDoLead) return res.status(404).send("Link não encontrado");
+    await noHotel(hotelDoLead, () => redirecionarLead(req, res));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Erro");
+  }
+});
+
+async function redirecionarLead(req, res) {
+  try {
     const lead = await buscarLead(req.params.id);
     if (!lead) return res.status(404).send("Link não encontrado");
     await registrarClique(lead.id);
@@ -104,7 +134,7 @@ app.get("/r/:id", async (req, res) => {
     console.error(err);
     res.status(500).send("Erro");
   }
-});
+}
 
 app.get("/api/metricas", async (_req, res) => {
   try {
@@ -118,7 +148,9 @@ app.get("/api/metricas", async (_req, res) => {
 // Calendário iCal que o Airbnb (ou outro canal) importa. O token no link é o segredo.
 app.get("/api/ical/:arquivo", async (req, res) => {
   try {
-    const ics = await calendarioExportado(req.params.arquivo.replace(/\.ics$/, ""));
+    const token = req.params.arquivo.replace(/\.ics$/, "");
+    const hotel = await localizarHotel("canais", "token_exportar", token);
+    const ics = hotel && (await noHotel(hotel, () => calendarioExportado(token)));
     if (!ics) return res.status(404).send("Calendário não encontrado");
     res.set({ "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store" }).send(ics);
   } catch (err) {
@@ -134,11 +166,25 @@ app.use("/api/checkin", checkin);
 // e manda os lembretes de pagamento por e-mail. A rota de lembretes confere o CRON_SECRET.
 app.all("/api/tarefas/lembretes", async (req, res, next) => {
   if (process.env.CRON_SECRET && req.get("authorization") === `Bearer ${process.env.CRON_SECRET}`) {
-    await sincronizarCanais().catch((err) => console.error("iCal:", err.message));
-    await tarefasFNRH().catch((err) => console.error("FNRH:", err.message));
+    return res.json(await tarefasDeTodosOsHoteis(urlBase(req)));
   }
   next();
 }, rotaLembretes);
+
+const urlBase = (req) => process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+
+// Tarefas agendadas, hotel por hotel: calendários, FNRH e lembretes de pagamento
+export async function tarefasDeTodosOsHoteis(base) {
+  const resultado = {};
+  for (const id of await hoteisAtivos()) {
+    resultado[id] = await noHotel(id, async () => {
+      await sincronizarCanais().catch((err) => console.error(`iCal (${id}):`, err.message));
+      await tarefasFNRH().catch((err) => console.error(`FNRH (${id}):`, err.message));
+      return enviarLembretes(base).catch((err) => ({ erro: err.message }));
+    });
+  }
+  return resultado;
+}
 
 rotasWhatsapp(app);
 rotasLeadsMeta(app);

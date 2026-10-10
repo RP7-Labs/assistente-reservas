@@ -3,13 +3,14 @@
 // com um modelo de mensagem aprovado (a primeira mensagem para quem nunca escreveu precisa ser modelo).
 // A conversa segue no fluxo normal do assistente, e a reserva paga volta para a Meta como conversão do lead.
 import crypto from "node:crypto";
-import { carregarHotel } from "./catalogo.js";
+import { carregarHotel, noHotel, hotelPorIntegracao } from "./catalogo.js";
 import {
   buscarLeadMeta, salvarLeadMeta, salvarOrigem, carregarConversa, salvarConversa, marcarAtendente,
 } from "./store.js";
 import { enviar, whatsappConfigurado } from "./whatsapp.js";
+import { envDoHotel, HOTEL_PADRAO } from "./tenant.js";
 
-export function configLeadsMeta(env = process.env) {
+export function configLeadsMeta(env = envDoHotel()) {
   return {
     token: env.META_PAGE_TOKEN || null,                 // token da página com a permissão leads_retrieval
     segredoApp: env.META_APP_SECRET || null,            // confere a assinatura do webhook
@@ -126,13 +127,17 @@ export async function receberLead(dados, opcoes = {}) {
   return contatarLead(lead, opcoes);
 }
 
-// Ids de lead que vieram no webhook da página
-export function idsDoWebhook(corpo) {
+// Leads que vieram no webhook, com a página de origem (cada hotel tem a sua página)
+export function leadsDoWebhook(corpo) {
   if (corpo?.object !== "page") return [];
-  return (corpo.entry ?? []).flatMap((e) => e.changes ?? [])
-    .filter((c) => c.field === "leadgen" && c.value?.leadgen_id)
-    .map((c) => String(c.value.leadgen_id));
+  return (corpo.entry ?? []).flatMap((e) => (e.changes ?? []).map((c) => ({ c, pagina: c.value?.page_id ?? e.id })))
+    .filter(({ c }) => c.field === "leadgen" && c.value?.leadgen_id)
+    .map(({ c, pagina }) => ({ id: String(c.value.leadgen_id), pagina: pagina != null ? String(pagina) : null }));
 }
+export const idsDoWebhook = (corpo) => leadsDoWebhook(corpo).map((l) => l.id);
+
+// Página cadastrada num hotel; senão, o hotel padrão (que usa as variáveis de ambiente)
+const hotelDaPagina = async (pagina) => (await hotelPorIntegracao("meta_page_id", pagina)) ?? HOTEL_PADRAO;
 
 export function rotasLeadsMeta(app) {
   app.get("/webhook/meta-leads", (req, res) => {
@@ -142,19 +147,22 @@ export function rotasLeadsMeta(app) {
   });
 
   app.post("/webhook/meta-leads", async (req, res) => {
-    const cfg = configLeadsMeta();
-    // Com o segredo do app configurado, só aceita o que a Meta assinou. Sem ele, um id falso
-    // também não passa: o lead é sempre lido na Graph API com o nosso token.
-    if (cfg.segredoApp && !assinaturaValida(req.rawBody, req.get("x-hub-signature-256"), cfg.segredoApp)) return res.sendStatus(401);
+    // O app da Meta é um só para a plataforma: o segredo dele vem das variáveis de ambiente.
+    // Com o segredo configurado, só aceita o que a Meta assinou. Sem ele, um id falso
+    // também não passa: o lead é sempre lido na Graph API com o token da página.
+    const segredoApp = process.env.META_APP_SECRET;
+    if (segredoApp && !assinaturaValida(req.rawBody, req.get("x-hub-signature-256"), segredoApp)) return res.sendStatus(401);
     // Processa antes de responder: na Vercel a função é congelada depois da resposta
-    for (const id of idsDoWebhook(req.body)) {
-      try {
-        const dados = await buscarLeadNaMeta(id, cfg);
-        await receberLead(dados);
-      } catch (err) {
-        console.error("Lead da Meta:", id, err.message);
-        await salvarLeadMeta({ id, status: "novo", erro: err.message }).catch(() => {});
-      }
+    for (const { id, pagina } of leadsDoWebhook(req.body)) {
+      await noHotel(await hotelDaPagina(pagina), async () => {
+        try {
+          const dados = await buscarLeadNaMeta(id, configLeadsMeta());
+          await receberLead(dados);
+        } catch (err) {
+          console.error("Lead da Meta:", id, err.message);
+          await salvarLeadMeta({ id, status: "novo", erro: err.message }).catch(() => {});
+        }
+      });
     }
     res.sendStatus(200);
   });

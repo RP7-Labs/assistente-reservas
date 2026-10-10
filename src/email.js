@@ -1,15 +1,16 @@
 // Envio de e-mail. Com RESEND_API_KEY e EMAIL_FROM, envia de verdade pela Resend.
 // Sem eles, só registra o e-mail (modo simulado), visível no back-office.
 import { registrarEmail } from "./store.js";
+import { envDoHotel } from "./tenant.js";
 
-export const modoEmail = () => (process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "resend" : "simulado");
+export const modoEmail = () => (process.env.RESEND_API_KEY && envDoHotel().EMAIL_FROM ? "resend" : "simulado");
 
 // Em testes sem domínio verificado, a Resend só entrega no e-mail do dono da conta.
 // EMAIL_TESTE_PARA desvia todos os e-mails para esse endereço, avisando para quem iriam.
 function destino(para, assunto, texto) {
   const teste = process.env.EMAIL_TESTE_PARA;
-  if (!teste || teste === para) return { from: process.env.EMAIL_FROM, to: [para], subject: assunto, text: texto };
-  return { from: process.env.EMAIL_FROM, to: [teste], subject: `[para ${para}] ${assunto}`, text: `(E-mail de teste: iria para ${para})\n\n${texto}` };
+  if (!teste || teste === para) return { from: envDoHotel().EMAIL_FROM, to: [para], subject: assunto, text: texto };
+  return { from: envDoHotel().EMAIL_FROM, to: [teste], subject: `[para ${para}] ${assunto}`, text: `(E-mail de teste: iria para ${para})\n\n${texto}` };
 }
 
 export async function enviarEmail({ para, assunto, texto, tipo = null, leadId = null }) {

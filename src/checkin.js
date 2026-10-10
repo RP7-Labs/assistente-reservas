@@ -1,8 +1,9 @@
 // Check-in digital: link de pré-check-in, ficha dos hóspedes, unidade e senha da fechadura.
 import crypto from "node:crypto";
 import express from "express";
-import { carregarHotel } from "./catalogo.js";
+import { carregarHotel, noHotel } from "./catalogo.js";
 import {
+  localizarHotel,
   buscarCheckin, salvarCheckin, listarCheckins, listarUnidades, buscarReserva, listarDados, listarPagamentos,
 } from "./store.js";
 import { configTTLock, criarSenhaTTLock, apagarSenhaTTLock, novaSenha } from "./fechaduras.js";
@@ -196,6 +197,17 @@ async function emailSenha(hotel, reserva, ck) {
 // ---- Rotas públicas do pré-check-in ----
 
 export const checkin = express.Router();
+
+// O token do link diz de qual hotel é o check-in
+checkin.param("token", async (req, res, next, token) => {
+  try {
+    const hotel = await localizarHotel("checkins", "token", token);
+    if (!hotel) return next();
+    await noHotel(hotel, () => next());
+  } catch (err) {
+    next(err);
+  }
+});
 
 const rota = (fn) => async (req, res) => {
   try {

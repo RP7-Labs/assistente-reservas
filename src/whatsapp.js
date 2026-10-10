@@ -1,6 +1,8 @@
 import { responder } from "./assistente.js";
 import { origemWhatsapp, registrarOrigem } from "./rastreio.js";
 import { marcarRespostaLeadMeta } from "./store.js";
+import { envDoHotel, HOTEL_PADRAO } from "./tenant.js";
+import { noHotel, hotelPorIntegracao } from "./catalogo.js";
 
 // Webhook da WhatsApp Cloud API (Meta).
 export function rotasWhatsapp(app) {
@@ -11,7 +13,25 @@ export function rotasWhatsapp(app) {
 
   app.post("/webhook/whatsapp", async (req, res) => {
     // Processa antes de responder: na Vercel a função é congelada depois da resposta
-    const msgs = req.body?.entry?.flatMap((e) => e.changes ?? []).flatMap((c) => c.value?.messages ?? []) ?? [];
+    const mudancas = req.body?.entry?.flatMap((e) => e.changes ?? []) ?? [];
+    for (const c of mudancas) {
+      // Cada hotel tem o próprio número: o phone_number_id diz de qual hotel é a conversa
+      const hotel = await hotelDoNumero(c.value?.metadata?.phone_number_id);
+      if (!hotel) { console.warn("WhatsApp de número desconhecido:", c.value?.metadata?.phone_number_id); continue; }
+      await noHotel(hotel, () => atenderMensagens(c.value?.messages ?? []));
+    }
+    res.sendStatus(200);
+  });
+}
+
+async function hotelDoNumero(phoneId) {
+  const h = await hotelPorIntegracao("whatsapp_phone_number_id", phoneId);
+  if (h) return h;
+  // Número das variáveis de ambiente (ou sem número informado): hotel padrão
+  return !phoneId || !process.env.WHATSAPP_PHONE_NUMBER_ID || String(phoneId) === process.env.WHATSAPP_PHONE_NUMBER_ID ? HOTEL_PADRAO : null;
+}
+
+async function atenderMensagens(msgs) {
     for (const m of msgs) {
       // Texto digitado ou toque em botão/lista (o id do botão é o texto da opção)
       const texto = m.type === "text" ? m.text.body
@@ -29,8 +49,6 @@ export function rotasWhatsapp(app) {
         console.error("Erro no WhatsApp:", err);
       }
     }
-    res.sendStatus(200);
-  });
 }
 
 const corta = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
@@ -47,12 +65,12 @@ export function montarMensagem(texto, opcoes = []) {
     action: { button: "Ver opções", sections: [{ title: "Opções", rows: ops.map((o) => ({ id: corta(o.texto, 200), title: corta(o.rotulo, 24) })) }] } } };
 }
 
-export const whatsappConfigurado = () => Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+export const whatsappConfigurado = (env = envDoHotel()) => Boolean(env.WHATSAPP_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID);
 
 // Envia uma mensagem pela Cloud API. Devolve { ok, erro? } para quem precisa saber se saiu.
 export async function enviar(para, mensagem, buscarFn = fetch) {
   const texto = mensagem.text?.body ?? mensagem.interactive?.body?.text ?? mensagem.template?.name;
-  const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID } = process.env;
+  const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID } = envDoHotel();
   if (!whatsappConfigurado()) {
     console.warn("WhatsApp não configurado; mensagem:", texto);
     return { ok: false, erro: "WhatsApp não configurado", simulado: true };

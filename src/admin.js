@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import express from "express";
 import { gerarHash, conferirSenha, criarToken, lerToken, normalizarEmail, emailValido } from "./auth.js";
-import { carregarHotel } from "./catalogo.js";
+import { carregarHotel, noHotel, prepararHotel, limparCacheHoteis } from "./catalogo.js";
+import { hotelId, HOTEL_PADRAO, SLUG_RE } from "./tenant.js";
+import { PAISES } from "./paises.js";
 import {
   listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
@@ -19,7 +21,7 @@ import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } fr
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento, acaoGetnet } from "./pagamento.js";
 import { receberLead, contatarLead, modoLeadsMeta } from "./leadsMeta.js";
-import { listarLeadsMeta, buscarLeadMeta } from "./store.js";
+import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel } from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
@@ -32,18 +34,32 @@ const aprovado = (a) => a?.status === "aprovado" || ehPrincipal(a);
 
 // Sessão: token assinado no cabeçalho Authorization: Bearer <token>.
 // A cada requisição confere se o admin ainda está aprovado, então revogar vale na hora.
+// O admin trabalha no hotel do token. Admin da plataforma (PLATAFORMA_EMAILS) pode abrir outro hotel com X-Hotel.
 async function exigirLogin(req, res, next) {
   try {
     const sessao = lerToken((req.get("authorization") ?? "").replace(/^Bearer\s+/i, ""));
-    const admin = sessao && (await buscarAdmin(sessao.id));
+    const hotelDoToken = sessao?.h ?? HOTEL_PADRAO;
+    const admin = sessao && (await noHotel(hotelDoToken, () => buscarAdmin(sessao.id)));
     if (!admin || !aprovado(admin)) return res.status(401).json({ erro: "Sessão expirada. Entre novamente." });
     req.admin = admin;
-    next();
+    req.admin.plataforma = ehPlataforma(admin);
+    const pedido = String(req.get("x-hotel") ?? "").trim().toLowerCase();
+    let hotel = hotelDoToken;
+    if (pedido && pedido !== hotelDoToken) {
+      if (!req.admin.plataforma) return res.status(403).json({ erro: "Sem acesso a este hotel." });
+      if (!SLUG_RE.test(pedido) || !(await prepararHotel(pedido))) return res.status(404).json({ erro: "Hotel não encontrado" });
+      hotel = pedido;
+    }
+    req.hotelId = hotel;
+    await noHotel(hotel, () => next());
   } catch (err) {
     console.error(err);
     res.status(500).json({ erro: err.message });
   }
 }
+
+// Admins da plataforma (donos do produto): criam hotéis e entram em qualquer um
+const ehPlataforma = (a) => String(process.env.PLATAFORMA_EMAILS ?? process.env.ADMIN_EMAIL ?? "").split(",").map(normalizarEmail).filter(Boolean).includes(a?.email);
 
 const rota = (fn) => async (req, res) => {
   try {
@@ -66,7 +82,7 @@ admin.post("/cadastro", rota(async (req, res) => {
   if (!nome) return res.status(400).json({ erro: "Informe o nome." });
   if (!emailValido(email)) return res.status(400).json({ erro: "E-mail inválido." });
   if (senha.length < 8) return res.status(400).json({ erro: "A senha precisa ter pelo menos 8 caracteres." });
-  if (await buscarAdminPorEmail(email)) return res.status(409).json({ erro: "Este e-mail já tem cadastro." });
+  if (await localizarHotel("admins", "email", email)) return res.status(409).json({ erro: "Este e-mail já tem cadastro." });
 
   const automatico = ehPrincipal({ email });
   const novo = await criarAdmin({
@@ -79,17 +95,50 @@ admin.post("/cadastro", rota(async (req, res) => {
 
 admin.post("/entrar", rota(async (req, res) => {
   const email = normalizarEmail(req.body?.email);
-  const a = await buscarAdminPorEmail(email);
+  // O e-mail é único na plataforma: ele diz de qual hotel é o admin
+  const hotel = (await localizarHotel("admins", "email", email)) ?? hotelId();
+  const a = await noHotel(hotel, () => buscarAdminPorEmail(email));
   const ok = a && (await conferirSenha(String(req.body?.senha ?? ""), a.senha_hash));
   if (!ok) return res.status(401).json({ erro: "E-mail ou senha incorretos." });
   if (!aprovado(a) && a.status === "pendente") return res.status(403).json({ erro: "Seu acesso ainda está aguardando aprovação de um admin." });
   if (!aprovado(a)) return res.status(403).json({ erro: "Seu acesso não está liberado." });
-  res.json({ token: criarToken(a.id), admin: publico(a) });
+  res.json({ token: criarToken(a.id, Date.now(), hotel), admin: publico(a) });
 }));
 
 admin.use(exigirLogin);
 
-admin.get("/eu", (req, res) => res.json(publico(req.admin)));
+admin.get("/eu", (req, res) => {
+  const h = carregarHotel();
+  res.json({ ...publico(req.admin), plataforma: req.admin.plataforma, hotel: { id: h.id, nome: h.nome, pais: h.pais, idioma: h.idioma, moeda: h.moeda, fuso: h.fuso } });
+});
+
+// ---- Hotéis da plataforma (só admins da plataforma) ----
+
+const soPlataforma = (req, res, next) => (req.admin.plataforma ? next() : res.status(403).json({ erro: "Só para admins da plataforma." }));
+
+admin.get("/hoteis", soPlataforma, rota(async (_req, res) => {
+  const cadastrados = await listarHoteis();
+  const ids = new Set(cadastrados.map((h) => h.id));
+  const lista = ids.has(HOTEL_PADRAO) ? cadastrados : [{ id: HOTEL_PADRAO, nome: (await noHotel(HOTEL_PADRAO, () => carregarHotel())).nome, pais: "BR", ativo: true, dominios: [], config: {} }, ...cadastrados];
+  res.json({ hoteis: lista.map(({ config, ...h }) => ({ ...h, quartos: config?.quartos?.length ?? null })), paises: Object.fromEntries(Object.entries(PAISES).map(([k, p]) => [k, p.nome])) });
+}));
+
+// Cria ou atualiza um hotel. O primeiro admin do hotel novo pede acesso pela tela de login com ?hotel=<id>.
+admin.post("/hoteis", soPlataforma, rota(async (req, res) => {
+  const b = req.body ?? {};
+  const id = String(b.id ?? "").trim().toLowerCase();
+  if (!SLUG_RE.test(id)) return res.status(400).json({ erro: "Id do hotel: letras minúsculas, números e hífen (2 a 40)." });
+  const nome = String(b.nome ?? "").trim().slice(0, 120);
+  if (!nome) return res.status(400).json({ erro: "Informe o nome do hotel." });
+  const pais = String(b.pais ?? "BR").toUpperCase();
+  if (!PAISES[pais]) return res.status(400).json({ erro: "País não atendido." });
+  const atual = await buscarHotelRegistro(id);
+  const dominios = String(b.dominios ?? "").split(/[\s,]+/).map((d) => d.trim().toLowerCase()).filter(Boolean);
+  const config = { ...(atual?.config ?? {}), ...(b.cidade ? { cidade: String(b.cidade).slice(0, 80) } : {}) };
+  const salvo = await salvarHotelRegistro({ id, nome, pais, idioma: b.idioma || null, moeda: b.moeda || null, fuso: b.fuso || null, dominios, config, ativo: b.ativo !== false });
+  limparCacheHoteis();
+  res.status(atual ? 200 : 201).json(salvo);
+}));
 
 admin.get("/usuarios", rota(async (_req, res) => {
   const todos = await listarAdmins();

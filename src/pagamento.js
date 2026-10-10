@@ -2,8 +2,10 @@
 // (src/getnet.js); sem elas, tudo é simulado e nada é cobrado.
 import crypto from "node:crypto";
 import express from "express";
-import { carregarHotel, precoTotal } from "./catalogo.js";
-import { buscarLead, buscarPagamento, salvarPagamento, salvarReserva, listarDados, pagamentosSemLembrete } from "./store.js";
+import { carregarHotel, precoTotal, noHotel } from "./catalogo.js";
+import { HOTEL_PADRAO } from "./tenant.js";
+import { dinheiro } from "./paises.js";
+import { localizarHotel, buscarLead, buscarPagamento, salvarPagamento, salvarReserva, listarDados, pagamentosSemLembrete } from "./store.js";
 import { disponibilidade } from "./backoffice.js";
 import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
 import { enviarEmail } from "./email.js";
@@ -65,7 +67,7 @@ export function resumoPedido(hotel, lead) {
   const quarto = hotel.quartos.find((q) => q.id === lead.quarto_id);
   const noites = noitesDe(lead);
   return {
-    lead_id: lead.id, hotel: hotel.nome, quarto: quarto?.nome ?? lead.quarto_id, quarto_id: lead.quarto_id,
+    lead_id: lead.id, hotel: hotel.nome, moeda: hotel.moeda ?? "BRL", idioma: hotel.idioma ?? "pt-BR", quarto: quarto?.nome ?? lead.quarto_id, quarto_id: lead.quarto_id,
     checkin: lead.checkin, checkout: lead.checkout, noites, adultos: lead.adultos, criancas: lead.criancas,
     diaria: quarto?.preco_a_partir ?? 0, total: precoTotal(quarto, noites), mensal: Boolean(quarto?.preco_mensal && precoTotal(quarto, noites) !== (quarto?.preco_a_partir ?? 0) * noites),
   };
@@ -85,7 +87,7 @@ async function temVaga(hotel, lead) {
 
 const linkPagamento = (base, leadId) => `${base}/pagamento?lead=${encodeURIComponent(leadId)}`;
 const br = (d) => d.split("-").reverse().join("/");
-const reais = (v) => `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+const reais = (v) => dinheiro(v, carregarHotel());
 
 // Confirma a reserva depois do pagamento aprovado e avisa o hóspede por e-mail
 const pessoas = (r) => `${r.adultos} adulto${r.adultos > 1 ? "s" : ""}${r.criancas ? ` e ${r.criancas} criança${r.criancas > 1 ? "s" : ""}` : ""}`;
@@ -177,6 +179,17 @@ const rota = (fn) => async (req, res) => {
 };
 
 export const pagamento = express.Router();
+
+// O link de pagamento já diz o hotel: cada lead é de um hotel só
+pagamento.param("lead", async (req, res, next, id) => {
+  try {
+    const hotel = await localizarHotel("leads", "id", id);
+    if (!hotel) return next();
+    await noHotel(hotel, () => next());
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Carrega o lead e o pagamento; responde 404/409 se não der para pagar
 async function carregar(req, res) {
@@ -331,8 +344,13 @@ export async function tratarNotificacaoGetnet(query, base) {
 }
 
 pagamento.get("/getnet/notificacao/:segredo", rota(async (req, res) => {
-  if (!getnet.segredoConfere(req.params.segredo)) return res.status(404).end();
-  const r = await tratarNotificacaoGetnet(req.query, urlBase(req));
+  // O pedido (order_id) é o lead, que diz de qual hotel é o pagamento
+  const hotel = await localizarHotel("leads", "id", String(req.query.order_id ?? "")) ?? HOTEL_PADRAO;
+  const r = await noHotel(hotel, async () => {
+    if (!getnet.segredoConfere(req.params.segredo)) return null;
+    return tratarNotificacaoGetnet(req.query, urlBase(req));
+  });
+  if (!r) return res.status(404).end();
   if (!r.ok) console.error("Getnet notificação ignorada:", r.motivo, req.query.order_id ?? "");
   res.status(200).json({ ok: r.ok });
 }));

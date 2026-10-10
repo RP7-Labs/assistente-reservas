@@ -126,11 +126,13 @@
   </div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="/hotel.js"></script>
 <script src="/rastreio.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const lead = new URLSearchParams(location.search).get("lead");
-const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+let moeda = { idioma: "pt-BR", codigo: "BRL" };
+const brl = (v) => Number(v).toLocaleString(moeda.idioma, { style: "currency", currency: moeda.codigo });
 const br = (d) => d.split("-").reverse().join("/");
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let pedido, provedor = "simulado", vigia = null;
@@ -171,6 +173,7 @@ async function iniciar() {
   try {
     const d = await api("");
     pedido = d.pedido;
+    if (pedido.moeda) moeda = { idioma: pedido.idioma || "pt-BR", codigo: pedido.moeda };
     provedor = d.provedor || "simulado";
     if (provedor === "getnet") { $("#formCartao").hidden = true; $("#areaCartaoGetnet").hidden = false; }
     mostrarResumo(pedido);

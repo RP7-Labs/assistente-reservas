@@ -137,3 +137,14 @@ Quem preenche o formulário de um anúncio da Meta (Lead Ads) recebe uma mensage
 A reserva paga desse lead volta para a Meta como evento de CRM com o `lead_id` (Conversion Leads), para a campanha otimizar por quem reserva, não por quem preenche formulário.
 
 **Estadia mensal:** quarto com `preco_mensal` em `data/hotel.json` cobra o preço do mês a partir de `minimo_noites_mensal` noites (padrão 28). O chat entende "1 mês", "2 meses" e "mensal".
+
+## Vários hotéis e países
+
+O sistema atende vários hotéis no mesmo deploy, cada um com os próprios dados, usuários e configuração, e quatro países: Brasil, Argentina, Paraguai e Estados Unidos (`src/paises.js`: idioma, moeda, fuso, documento do hóspede e meio de pagamento padrão).
+
+- **Migração:** rode `db/011_multihotel.sql` no Supabase logo depois do deploy. Ela cria a tabela `hoteis` e a coluna `hotel_id` em todas as tabelas; os dados atuais ficam no hotel `principal`.
+- **Qual hotel:** domínio cadastrado no hotel, ou `?hotel=<id>` no link do chat, do pagamento e do back-office. Links com id próprio (pagamento, check-in, calendário iCal, `/r/:id`) acham o hotel sozinhos. WhatsApp e leads da Meta acham o hotel pelo `whatsapp_phone_number_id` e pelo `meta_page_id` em `config.integracoes`.
+- **Admins da plataforma** (`PLATAFORMA_EMAILS`, ou o `ADMIN_EMAIL`) veem a aba Hotéis, criam hotéis e trocam de hotel pelo seletor. O admin de um hotel só vê o próprio hotel.
+- **Chaves:** as variáveis de ambiente (Getnet, WhatsApp, Meta, TTLock, FNRH) valem só para o hotel `principal`. Outros hotéis ficam simulados até a fase de chaves por hotel. Getnet e FNRH só ligam para hotéis do Brasil.
+
+Plano das próximas fases em `/mnt/project-files/avaliacoes/plano-multitenant.md`.

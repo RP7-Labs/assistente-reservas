@@ -131,7 +131,10 @@
       <button data-aba="checkin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span class="txt">Check-in</span><span class="badge" id="badgeCheckin" hidden></span></button>
       <button data-aba="canais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 21v-5h5"/></svg><span class="txt">Canais</span><span class="badge" id="badgeCanais" hidden></span></button>
       <button data-aba="usuarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span class="txt">Usuários</span><span class="badge" id="badgeUsu" hidden></span></button>
+      <button data-aba="hoteis" id="abaHoteis" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></svg><span class="txt">Hotéis</span></button>
     </nav>
+    <label id="trocaHotel" hidden style="display:grid;gap:4px;margin:0 6px 10px;font-size:12.5px" class="mut">Hotel
+      <select id="selHotel"></select></label>
     <div class="usuario"><span class="ini" id="iniciais">?</span><div><strong id="quem"></strong><span class="mut">Administrador</span></div>
       <button id="sair" title="Sair" aria-label="Sair"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div>
   </aside>
@@ -284,6 +287,22 @@
     </table></div>
     <p class="aviso">Quem quiser acesso usa "Pedir acesso" na tela de entrada. O pedido aparece aqui para qualquer admin aprovar ou recusar.</p>
   </section>
+
+  <section data-sec="hoteis" hidden>
+    <p class="aviso">Cada hotel tem os próprios dados, usuários e integrações. O hotel abre pelo domínio cadastrado ou por <span class="mono">?hotel=&lt;id&gt;</span> no link do chat e do back-office. O primeiro usuário do hotel pede acesso em <span class="mono">/admin?hotel=&lt;id&gt;</span>, e você aprova entrando no hotel pelo seletor ao lado.</p>
+    <form id="formHotel" class="card" style="padding:16px;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));align-items:end;margin-bottom:16px">
+      <label style="display:grid;gap:6px">Id (no link)<input name="id" placeholder="hotel-mar-azul" required pattern="[a-z0-9][a-z0-9-]{1,39}"></label>
+      <label style="display:grid;gap:6px">Nome<input name="nome" placeholder="Hotel Mar Azul" required></label>
+      <label style="display:grid;gap:6px">País<select name="pais" id="selPais"></select></label>
+      <label style="display:grid;gap:6px">Cidade<input name="cidade" placeholder="Balneário Camboriú"></label>
+      <label style="display:grid;gap:6px">Domínios (opcional)<input name="dominios" placeholder="reservas.hotelmarazul.com"></label>
+      <div style="display:flex;gap:8px;align-items:center"><button class="btn prim">Salvar hotel</button><span class="erro" id="hotelErro"></span></div>
+    </form>
+    <div class="tabela"><table>
+      <thead><tr><th>Id</th><th>Nome</th><th>País</th><th>Moeda</th><th>Domínios</th><th>Quartos</th><th></th></tr></thead>
+      <tbody id="tbHoteis"></tbody>
+    </table></div>
+  </section>
   </main>
 </div>
 
@@ -341,14 +360,18 @@ const tagStatus = (s) => { const [t, c] = STATUS[s] ?? [s, ""]; return `<span cl
 
 let token = "";
 let eu = null;
-try { token = localStorage.getItem("adminToken") || ""; } catch {}
+// Hotel aberto por um admin da plataforma (vazio = o hotel do próprio usuário)
+let hotelAdmin = "";
+try { token = localStorage.getItem("adminToken") || ""; hotelAdmin = localStorage.getItem("hotelAdmin") || ""; } catch {}
+const hotelDaUrl = new URLSearchParams(location.search).get("hotel") || "";
 let painel = null;
 let nomes = {};
 
 async function api(caminho, opcoes = {}) {
   const r = await fetch("/api/admin" + caminho, {
     ...opcoes,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(opcoes.headers || {}) },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...((hotelAdmin || (!token && hotelDaUrl)) ? { "X-Hotel": hotelAdmin || hotelDaUrl } : {}), ...(opcoes.headers || {}) },
   });
   const corpo = await r.json().catch(() => ({}));
   if (r.status === 401 && token) { sair(); throw new Error(corpo.erro || "Sessão expirada"); }
@@ -358,7 +381,8 @@ async function api(caminho, opcoes = {}) {
 
 function sair() {
   token = ""; eu = null;
-  try { localStorage.removeItem("adminToken"); } catch {}
+  hotelAdmin = "";
+  try { localStorage.removeItem("adminToken"); localStorage.removeItem("hotelAdmin"); } catch {}
   $("#app").hidden = true; $("#login").hidden = false;
 }
 
@@ -387,7 +411,7 @@ async function enviarLogin(e) {
       }
     }
     const r = await api("/entrar", { method: "POST", body: JSON.stringify({ email: dados.email, senha: dados.senha }) });
-    token = r.token; eu = r.admin;
+    token = r.token; eu = null;
     try { localStorage.setItem("adminToken", token); } catch {}
     await abrirApp();
   } catch (err) { $("#loginErro").textContent = err.message; }
@@ -399,8 +423,32 @@ async function abrirApp() {
   $("#quem").textContent = eu.nome;
   $("#iniciais").textContent = eu.nome.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("#login").hidden = true; $("#app").hidden = false;
+  if (eu.plataforma) await carregarHoteis().catch((err) => console.error(err));
   await carregar();
 }
+
+async function carregarHoteis() {
+  const d = await api("/hoteis");
+  $("#abaHoteis").hidden = false; $("#trocaHotel").hidden = false;
+  const atual = hotelAdmin || eu.hotel?.id;
+  $("#selHotel").innerHTML = d.hoteis.map((h) => `<option value="${esc(h.id)}" ${h.id === atual ? "selected" : ""}>${esc(h.nome)}${h.ativo === false ? " (inativo)" : ""}</option>`).join("");
+  $("#selPais").innerHTML = Object.entries(d.paises).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join("");
+  $("#tbHoteis").innerHTML = d.hoteis.map((h) => `<tr><td class="mono">${esc(h.id)}</td><td><strong>${esc(h.nome)}</strong></td><td>${esc(d.paises[h.pais] || h.pais)}</td>
+    <td>${esc(h.moeda || "padrão do país")}</td><td class="mono">${esc((h.dominios || []).join(", ") || "—")}</td><td>${h.quartos ?? "—"}</td>
+    <td><button class="btn" data-abrir-hotel="${esc(h.id)}">Abrir</button></td></tr>`).join("");
+}
+function abrirHotel(id) {
+  hotelAdmin = id === eu.hotel?.id && !hotelAdmin ? "" : id;
+  try { hotelAdmin ? localStorage.setItem("hotelAdmin", hotelAdmin) : localStorage.removeItem("hotelAdmin"); } catch {}
+  eu = null; abrirApp().catch((err) => alert(err.message));
+}
+$("#selHotel").addEventListener("change", (e) => abrirHotel(e.target.value));
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-abrir-hotel]"); if (b) abrirHotel(b.dataset.abrirHotel); });
+$("#formHotel").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("#hotelErro").textContent = "";
+  try { await api("/hoteis", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(e.target))) }); e.target.reset(); await carregarHoteis(); }
+  catch (err) { $("#hotelErro").textContent = err.message; }
+});
 
 async function carregar() {
   painel = await api("/painel");

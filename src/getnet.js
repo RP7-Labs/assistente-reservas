@@ -2,6 +2,8 @@
 // nunca passar pelo nosso servidor. A captura e o cancelamento da pré-autorização são feitos pela API v2.
 // Sem GETNET_CLIENT_ID, GETNET_CLIENT_SECRET e GETNET_SELLER_ID, o checkout continua simulado.
 import crypto from "node:crypto";
+import { envDoHotel } from "./tenant.js";
+import { carregarHotel } from "./catalogo.js";
 
 const AMBIENTES = {
   sandbox: { api: "https://api-sandbox.getnet.com.br", iframe: "https://checkout-sandbox.getnet.com.br/loader.js" },
@@ -10,7 +12,9 @@ const AMBIENTES = {
   producao: { api: "https://api.getnet.com.br", iframe: "https://checkout.getnet.com.br/loader.js" },
 };
 
-export function configGetnet(env = process.env) {
+export function configGetnet(env = envDoHotel(), pais = carregarHotel().pais) {
+  // A Getnet atende só no Brasil; nos outros países o checkout fica simulado até ter o provedor local
+  if (pais && pais !== "BR") return null;
   const { GETNET_CLIENT_ID: id, GETNET_CLIENT_SECRET: segredo, GETNET_SELLER_ID: seller } = env;
   if (!id || !segredo || !seller) return null;
   const ambiente = AMBIENTES[env.GETNET_AMBIENTE] ? env.GETNET_AMBIENTE : "homologacao";
