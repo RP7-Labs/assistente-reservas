@@ -123,3 +123,17 @@ A API do Airbnb só é liberada para parceiros convidados, então a integração
 4. As tags só carregam depois do aceite de cookies (LGPD). Quem recusa continua com a origem guardada no servidor, mas sem Pixel nem tag.
 
 A aba mostra conversas, links, reservas pagas e receita por origem e campanha.
+
+## Leads dos formulários da Meta no WhatsApp
+
+Quem preenche o formulário de um anúncio da Meta (Lead Ads) recebe uma mensagem do assistente no WhatsApp em segundos. As respostas do formulário (datas, tempo de estadia, motivo) entram na conversa, e o assistente não pergunta de novo. Lead corporativo vai direto para um atendente.
+
+1. Rode `db/010_leads_meta.sql`.
+2. No WhatsApp Manager, crie e aprove um **modelo de mensagem** (categoria Marketing ou Utilidade) com `{{1}}` = primeiro nome. Ex.: "Olá, {{1}}! Aqui é do Rezende Suítes. Vi seu interesse no anúncio. Para quando você pensa em vir e por quanto tempo?". Coloque o nome em `WHATSAPP_MODELO_LEAD` e o texto em `WHATSAPP_MODELO_LEAD_TEXTO` (só para o histórico).
+3. No app da Meta, assine o campo **leadgen** da página com a URL `https://SEU-DOMINIO/webhook/meta-leads` e o token `META_LEADS_VERIFY_TOKEN` (ou o mesmo `WHATSAPP_VERIFY_TOKEN`).
+4. Defina `META_PAGE_TOKEN` (token da página com `leads_retrieval`) e `META_APP_SECRET` (confere a assinatura do webhook).
+5. Teste com a [ferramenta de teste de Lead Ads](https://developers.facebook.com/tools/lead-ads-testing) ou com "Simular um lead" na aba Campanhas.
+
+A reserva paga desse lead volta para a Meta como evento de CRM com o `lead_id` (Conversion Leads), para a campanha otimizar por quem reserva, não por quem preenche formulário.
+
+**Estadia mensal:** quarto com `preco_mensal` em `data/hotel.json` cobra o preço do mês a partir de `minimo_noites_mensal` noites (padrão 28). O chat entende "1 mês", "2 meses" e "mensal".

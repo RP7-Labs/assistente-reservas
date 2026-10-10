@@ -1,7 +1,7 @@
 // IA com plano gratuito (Gemini ou Groq) pela API compatível com OpenAI.
 // Usa as mesmas ferramentas do modo Claude: link de reserva validado e chamar atendente.
 // As dúvidas vêm da base data/conhecimento.md (RAG local) e as datas de feriado são calculadas aqui.
-import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
+import { carregarHotel, validarPedido, montarLinkMotor, precoTotal } from "./catalogo.js";
 import { criarLead } from "./store.js";
 import { hojeSP } from "./regras.js";
 import { sugerirPeriodo } from "./periodos.js";
@@ -33,6 +33,7 @@ export function promptSistema(hotel, texto, hoje) {
 Objetivo: ajudar o hóspede a reservar o quarto que ELE escolher, pelo canal direto do hotel, e tirar dúvidas.
 
 Regras:
+- Conversas que começam com "(Respostas do formulário do anúncio)" vieram de um anúncio da Meta: use essas respostas e não pergunte de novo o que já foi respondido. Estadia de um mês ou mais: ofereça os quartos com preço mensal.
 - Para reservar, você precisa de: quarto, data de entrada, data de saída (ou número de noites), adultos e crianças. Pergunte só o que falta, uma coisa por vez. Se o hóspede já disse algo, não pergunte de novo.
 - Com tudo em mãos, chame a ferramenta gerar_link_reserva. Nunca escreva um link por conta própria. Depois, diga em uma frase o resumo e que o link leva ao pagamento.
 - Respeite a escolha do hóspede. Só sugira outro quarto se o grupo não couber, explicando o motivo.
@@ -44,7 +45,7 @@ Regras:
   com até 6 opções curtas (até 24 letras), escritas como o hóspede responderia. Para pedir uma data, inclua a opção "Escolher data". Exemplos: ao perguntar o quarto, liste os quartos; ao perguntar noites, "1 noite | 2 noites | 3 noites"; no começo, "Fazer uma reserva | Ver quartos e preços | Dúvidas sobre o hotel".
 
 Quartos (id: nome, capacidade, preço a partir de):
-${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. R$ ${q.preco_a_partir}/diária.`).join("\n")}
+${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. R$ ${q.preco_a_partir}/diária.${q.preco_mensal ? ` Estadia de ${q.minimo_noites_mensal ?? 28} noites ou mais: R$ ${q.preco_mensal}/mês.` : ""}`).join("\n")}
 
 Check-in a partir das ${hotel.checkin}; check-out até as ${hotel.checkout}. ${hotel.politicas}
 
@@ -168,7 +169,7 @@ export async function responderComLLM({ historico, texto, canal, conversaId, pub
           const lead = await criarLead({ canal, conversa_id: conversaId, quarto_id: v.quarto.id, checkin: entrada.checkin, checkout: entrada.checkout, adultos: entrada.adultos, criancas: entrada.criancas, noites: v.noites });
           const link = publicUrl ? `${publicUrl}/r/${lead.id}` : montarLinkMotor(hotel, v.quarto, entrada, lead.id);
           eventos.push({ tipo: "link", lead_id: lead.id, quarto: v.quarto.nome, link });
-          conteudo = JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, total_a_partir: v.quarto.preco_a_partir * v.noites });
+          conteudo = JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, total_a_partir: precoTotal(v.quarto, v.noites) });
         }
       } else if (b.name === "chamar_atendente") {
         pedirAtendente = String(b.input.motivo ?? "pedido do hóspede").slice(0, 200);

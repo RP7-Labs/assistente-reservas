@@ -148,7 +148,7 @@ function mostrarResumo(p) {
     <div class="linha"><span class="mut">Entrada</span><span>${br(p.checkin)}</span></div>
     <div class="linha"><span class="mut">Saída</span><span>${br(p.checkout)}</span></div>
     <div class="linha"><span class="mut">Hóspedes</span><span>${pessoas}</span></div>
-    <div class="linha"><span class="mut">${p.noites} noite${p.noites > 1 ? "s" : ""} × ${brl(p.diaria)}</span><span>${brl(p.total)}</span></div>
+    <div class="linha"><span class="mut">${p.mensal ? `${p.noites} noites · preço de estadia mensal` : `${p.noites} noite${p.noites > 1 ? "s" : ""} × ${brl(p.diaria)}`}</span><span>${brl(p.total)}</span></div>
     <div class="linha total"><span>Total</span><span>${brl(p.total)}</span></div>`;
   $("#resumo").hidden = false;
   $("#btnCartao").textContent = `Pré-autorizar ${brl(p.total)}`;

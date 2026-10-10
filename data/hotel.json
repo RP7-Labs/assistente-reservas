@@ -23,7 +23,9 @@
       "capacidade_total": 3,
       "unidades": 8,
       "preco_a_partir": 280,
-      "codigo_motor": "EST"
+      "codigo_motor": "EST",
+      "preco_mensal": 3200,
+      "minimo_noites_mensal": 28
     },
     {
       "id": "suite",
@@ -59,5 +61,6 @@
       "codigo_motor": "FAM"
     }
   ],
-  "_comentario_unidades": "unidades = quantos quartos daquele tipo o hotel tem (usado na disponibilidade do back-office)"
+  "_comentario_unidades": "unidades = quantos quartos daquele tipo o hotel tem (usado na disponibilidade do back-office)",
+  "_comentario_mensal": "preco_mensal: preço do mês para estadias a partir de minimo_noites_mensal noites (Studio mensal). Valor de exemplo: confirmar com o Joel."
 }

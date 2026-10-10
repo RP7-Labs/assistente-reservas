@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
+import { carregarHotel, validarPedido, montarLinkMotor, precoTotal } from "./catalogo.js";
 import { criarLead, carregarConversa, salvarConversa, marcarAtendente } from "./store.js";
 import { responderPorRegras, hojeSP } from "./regras.js";
 import { configLLM, responderComLLM } from "./llm.js";
@@ -25,6 +25,8 @@ Regras:
 - Antes de gerar o link, confirme: tipo de quarto, data de entrada, data de saída, número de adultos e de crianças. Pergunte só o que faltar, uma coisa de cada vez.
 - Converta datas relativas ("próxima sexta", "dia 12") para AAAA-MM-DD. Hoje é ${hoje}.
 - Não invente preços, disponibilidade ou políticas além do catálogo. Os preços são "a partir de"; o valor final aparece no motor de reservas.
+- Estadia longa (um mês ou mais): quartos com preco_mensal têm preço de mês a partir de minimo_noites_mensal noites (padrão 28). Ofereça esses quartos.
+- Conversas que começam com "(Respostas do formulário do anúncio)" vieram de um anúncio da Meta: use essas respostas e não pergunte de novo o que já foi respondido.
 - Se o hóspede pedir algo fora de reserva (reclamação, pedido especial, grupo grande, evento), use chamar_atendente.
 
 Catálogo:
@@ -71,7 +73,7 @@ async function executarFerramenta(nome, entrada, ctx) {
     // Link curto que passa pelo nosso servidor para contar o clique
     const link = ctx.publicUrl ? `${ctx.publicUrl}/r/${lead.id}` : linkMotor;
     ctx.eventos.push({ tipo: "link", lead_id: lead.id, quarto: v.quarto.nome, link });
-    return { conteudo: JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, preco_a_partir_por_noite: v.quarto.preco_a_partir }) };
+    return { conteudo: JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, preco_a_partir_por_noite: v.quarto.preco_a_partir, total_a_partir: precoTotal(v.quarto, v.noites) }) };
   }
   if (nome === "chamar_atendente") {
     ctx.eventos.push({ tipo: "atendente", motivo: entrada.motivo });

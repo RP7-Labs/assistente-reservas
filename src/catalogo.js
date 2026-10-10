@@ -58,3 +58,12 @@ export function montarLinkMotor(hotel, quarto, { checkin, checkout, adultos, cri
   if (leadId) url.searchParams.set("utm_content", leadId);
   return url.toString();
 }
+
+// Total da estadia. Quarto com preco_mensal: a partir de minimo_noites_mensal (padrão 28) vale o preço do mês,
+// proporcional aos dias (estadia longa, como o Studio mensal); abaixo disso, diária × noites.
+export const MINIMO_MENSAL = 28;
+export function precoTotal(quarto, noites) {
+  if (!quarto) return 0;
+  if (quarto.preco_mensal && noites >= (quarto.minimo_noites_mensal ?? MINIMO_MENSAL)) return Math.round((quarto.preco_mensal / 30) * noites);
+  return (quarto.preco_a_partir ?? 0) * noites;
+}

@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { buscarOrigem, salvarOrigem, registrarConversao, buscarConversao, buscarLead } from "./store.js";
 
 const CAMPOS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "gclid", "gbraid", "wbraid", "fbclid", "fbp", "ctwa_clid", "ad_id"];
+// meta_lead_id não vem do navegador: só o webhook de leads grava (src/leadsMeta.js)
 const limpar = (v, max = 200) => (v == null ? null : String(v).trim().slice(0, max) || null);
 
 // Configuração pública (vai para o navegador): IDs, nunca tokens
@@ -85,6 +86,13 @@ export function eventoMeta({ evento, eventId, origem, pessoa = {}, valor, url, q
     return { ...base, action_source: "business_messaging", messaging_channel: "whatsapp", user_data: { whatsapp_business_account_id: waba, ctwa_clid: origem.ctwa_clid }, custom_data: custom };
   }
   const user = {};
+  // Lead de formulário da Meta: evento de CRM ligado ao lead_id (integração "Conversion Leads")
+  if (origem?.meta_lead_id) {
+    if (pessoa.email) user.em = [sha256(pessoa.email)];
+    if (pessoa.telefone) user.ph = [sha256(telefoneE164(pessoa.telefone))];
+    return { ...base, action_source: "system_generated", user_data: { lead_id: origem.meta_lead_id, ...user },
+      custom_data: { ...custom, event_source: "crm", lead_event_source: "Assistente de reservas" } };
+  }
   if (pessoa.email) user.em = [sha256(pessoa.email)];
   if (pessoa.telefone) user.ph = [sha256(telefoneE164(pessoa.telefone))];
   if (pessoa.nome) { const [fn, ...ln] = pessoa.nome.trim().split(/\s+/); user.fn = [sha256(fn)]; if (ln.length) user.ln = [sha256(ln.at(-1))]; }

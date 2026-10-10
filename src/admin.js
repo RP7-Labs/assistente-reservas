@@ -18,6 +18,8 @@ import { fonte, csvGoogleAds, configMeta, configPublica } from "./rastreio.js";
 import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento, acaoGetnet } from "./pagamento.js";
+import { receberLead, contatarLead, modoLeadsMeta } from "./leadsMeta.js";
+import { listarLeadsMeta, buscarLeadMeta } from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
@@ -398,4 +400,44 @@ admin.get("/campanhas/google-ads.csv", rota(async (req, res) => {
   const { vendas } = await dadosCampanhas(dias);
   res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=conversoes-google-ads.csv" })
     .send(csvGoogleAds(vendas));
+}));
+
+// ---- Leads dos formulários da Meta: chamados no WhatsApp pelo assistente ----
+
+// Situação de cada lead até a venda: recebido, chamado, respondeu, recebeu link, pagou
+admin.get("/leads-meta", rota(async (_req, res) => {
+  const [lista, { leads }, pagamentos] = await Promise.all([listarLeadsMeta().catch(() => []), listarDados(), listarPagamentos()]);
+  const pagos = new Set(pagamentos.filter((p) => ["pre_autorizado", "capturado", "pago"].includes(p.status)).map((p) => p.lead_id));
+  const linhas = lista.map((l) => {
+    const links = l.conversa_id ? leads.filter((x) => x.conversa_id === l.conversa_id) : [];
+    const pago = links.find((x) => pagos.has(x.id));
+    const etapa = pago ? "pagou" : links.length ? "link" : l.respondeu_em ? "respondeu" : l.status;
+    return { ...l, etapa, links: links.length, reserva_lead: pago?.id ?? null };
+  });
+  const conta = (e) => linhas.filter((l) => l.etapa === e).length;
+  res.json({
+    leads: linhas, modo: modoLeadsMeta(),
+    funil: { recebidos: linhas.length, chamados: linhas.filter((l) => l.contatado_em).length, responderam: linhas.filter((l) => l.respondeu_em).length, links: conta("link") + conta("pagou"), pagos: conta("pagou") },
+  });
+}));
+
+// Chama de novo no WhatsApp (ex.: modelo aprovado depois, ou falha no envio)
+admin.post("/leads-meta/:id/chamar", rota(async (req, res) => {
+  const lead = await buscarLeadMeta(req.params.id);
+  if (!lead) return res.status(404).json({ erro: "Lead não encontrado" });
+  const r = await contatarLead(lead);
+  res.status(r.status === "contatado" ? 200 : 409).json(r.status === "contatado" ? { ok: true } : { erro: r.erro || r.status });
+}));
+
+// Lead de teste, para ver o fluxo sem anúncio no ar
+admin.post("/leads-meta/teste", rota(async (req, res) => {
+  const b = req.body ?? {};
+  if (!String(b.telefone ?? "").replace(/\D/g, "")) return res.status(400).json({ erro: "Informe o telefone (WhatsApp)." });
+  const respostas = String(b.respostas ?? "").split("\n").map((x) => x.split(":")).filter(([p, r]) => p?.trim() && r?.trim())
+    .map(([p, ...r]) => ({ pergunta: p.trim(), resposta: r.join(":").trim() }));
+  const lead = await receberLead({
+    id: `teste-${crypto.randomBytes(4).toString("hex")}`, nome: String(b.nome ?? "").slice(0, 120) || "Teste",
+    telefone: b.telefone, email: b.email || null, respostas, campanha: "teste", ad_nome: "teste",
+  });
+  res.json({ ok: lead.status === "contatado", status: lead.status, erro: lead.erro ?? null, conversa_id: lead.conversa_id ?? null });
 }));

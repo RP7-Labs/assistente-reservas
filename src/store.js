@@ -19,9 +19,9 @@ const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "loca
 
 function lerArquivo() {
   try {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [], leads_meta: [], ...JSON.parse(fs.readFileSync(ARQUIVO, "utf8")) };
   } catch {
-    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [] };
+    return { leads: [], cliques: [], conversas: {}, atendimentos: {}, reservas: [], admins: [], pagamentos: [], emails: [], canais: [], bloqueios: [], unidades: [], checkins: [], origens: [], conversoes: [], leads_meta: [] };
   }
 }
 function gravarArquivo(db) {
@@ -436,4 +436,39 @@ export async function buscarConversao(plataforma, evento, eventId) {
 export async function listarConversoes(limite = 200) {
   if (sb) return verificar(await sb.from("conversoes").select("*").order("criado_em", { ascending: false }).limit(limite));
   return [...lerArquivo().conversoes].reverse().slice(0, limite);
+}
+
+// ---- Leads dos formulários de anúncio da Meta ----
+
+export async function buscarLeadMeta(id) {
+  if (sb) return verificar(await sb.from("leads_meta").select("*").eq("id", id).maybeSingle());
+  return lerArquivo().leads_meta.find((l) => l.id === id) ?? null;
+}
+
+export async function salvarLeadMeta(lead) {
+  const linha = { ...lead, atualizado_em: new Date().toISOString() };
+  if (sb) return verificar(await sb.from("leads_meta").upsert(linha).select().single());
+  const db = lerArquivo();
+  const i = db.leads_meta.findIndex((l) => l.id === linha.id);
+  if (i >= 0) db.leads_meta[i] = { ...db.leads_meta[i], ...linha };
+  else db.leads_meta.push({ recebido_em: linha.atualizado_em, status: "novo", tentativas: 0, ...linha });
+  gravarArquivo(db);
+  return db.leads_meta[i >= 0 ? i : db.leads_meta.length - 1];
+}
+
+export async function listarLeadsMeta(limite = 300) {
+  if (sb) return verificar(await sb.from("leads_meta").select("*").order("recebido_em", { ascending: false }).limit(limite));
+  return [...lerArquivo().leads_meta].sort((a, b) => String(b.recebido_em).localeCompare(String(a.recebido_em))).slice(0, limite);
+}
+
+// Marca a primeira resposta do lead no WhatsApp
+export async function marcarRespostaLeadMeta(conversaId, quando = new Date().toISOString()) {
+  if (sb) {
+    verificar(await sb.from("leads_meta").update({ respondeu_em: quando, atualizado_em: quando }).eq("conversa_id", conversaId).is("respondeu_em", null));
+    return;
+  }
+  const db = lerArquivo();
+  let mudou = false;
+  for (const l of db.leads_meta) if (l.conversa_id === conversaId && !l.respondeu_em) { l.respondeu_em = quando; mudou = true; }
+  if (mudou) gravarArquivo(db);
 }

@@ -216,6 +216,22 @@
       <label style="display:grid;gap:6px">Anúncio (opcional)<input name="conteudo" placeholder="video-piscina"></label>
       <div style="grid-column:1/-1;display:flex;gap:8px"><input id="linkCamp" readonly class="mono" style="flex:1;min-width:0"><button type="button" class="btn" data-copiar-de="linkCamp">Copiar</button></div>
     </form>
+    <h2>Leads dos formulários da Meta</h2>
+    <p class="mut" style="margin-top:-4px">Quem preenche o formulário do anúncio recebe uma mensagem do assistente no WhatsApp na hora. A reserva paga volta para a Meta como conversão do lead.</p>
+    <div id="funilLeads" class="kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
+    <div id="cfgLeads" class="aviso" style="margin:12px 0"></div>
+    <div class="tabela"><table>
+      <thead><tr><th>Recebido</th><th>Nome</th><th>WhatsApp</th><th>Campanha</th><th>Respostas</th><th>Etapa</th><th></th></tr></thead>
+      <tbody id="tbLeads"></tbody>
+    </table></div>
+    <details style="margin-top:12px"><summary>Simular um lead (teste)</summary>
+      <form id="formLeadTeste" class="card" style="padding:16px;display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:8px">
+        <label style="display:grid;gap:6px">Nome<input name="nome" placeholder="Ana Souza"></label>
+        <label style="display:grid;gap:6px">WhatsApp<input name="telefone" placeholder="(47) 99999-0000" required></label>
+        <label style="display:grid;gap:6px;grid-column:1/-1">Respostas do formulário (uma por linha, "pergunta: resposta")<textarea name="respostas" rows="3" placeholder="Quando pretende vir: 01/11&#10;Por quanto tempo: 1 mês&#10;Motivo: trabalho"></textarea></label>
+        <div style="grid-column:1/-1;display:flex;gap:8px;align-items:center"><button class="btn prim">Receber lead de teste</button><span id="msgLeadTeste" class="mut"></span></div>
+      </form>
+    </details>
     <h2>Conversões enviadas</h2>
     <div class="lista" id="listaConv"></div>
   </section>
@@ -614,7 +630,44 @@ async function carregarCampanhas() {
       ${v.ok ? "" : `<div class="erro" style="flex-basis:100%;font-size:12.5px">${esc(v.resposta || "")}</div>`}</div>`).join("")
     : `<div class="vazio">Nenhuma conversão enviada ainda.</div>`;
   montarLinkCamp();
+  await carregarLeadsMeta().catch((err) => { $("#tbLeads").innerHTML = `<tr><td colspan="7" class="erro">${esc(err.message)}</td></tr>`; });
 }
+const ETAPA = { novo: ["recebido", ""], contatado: ["chamado", "t-info"], respondeu: ["respondeu", "t-info"], link: ["recebeu link", "t-warn"], pagou: ["pagou", "t-ok"],
+  sem_telefone: ["sem telefone", "t-err"], sem_modelo: ["falta modelo", "t-err"], sem_whatsapp: ["WhatsApp desligado", "t-err"], falha_envio: ["falha no envio", "t-err"] };
+async function carregarLeadsMeta() {
+  const d = await api("/leads-meta");
+  const f = d.funil;
+  const kpi = (n, t) => `<div class="kpi"><div class="l">${t}</div><div class="v">${n}</div></div>`;
+  $("#funilLeads").innerHTML = kpi(f.recebidos, "leads recebidos") + kpi(f.chamados, "chamados no WhatsApp") + kpi(f.responderam, "responderam") + kpi(f.links, "receberam link") + kpi(f.pagos, "pagaram");
+  $("#cfgLeads").innerHTML = `${d.modo.estado === "ok" ? "✓" : "○"} ${esc(d.modo.detalhe)}. Webhook da Meta (campo leadgen da página): <span class="mono">${esc(camp?.link_base || "")}/webhook/meta-leads</span>`;
+  $("#tbLeads").innerHTML = d.leads.length ? d.leads.map((l) => {
+    const [rot, cls] = ETAPA[l.etapa] || [l.etapa, ""];
+    const resp = (l.respostas || []).map((r) => `${esc(r.pergunta)}: <strong>${esc(r.resposta)}</strong>`).join("<br>");
+    const chamar = ["sem_modelo", "sem_whatsapp", "falha_envio", "novo", "contatado"].includes(l.etapa) && l.telefone
+      ? `<button class="btn" data-chamar-lead="${esc(l.id)}">${l.etapa === "contatado" ? "Chamar de novo" : "Chamar"}</button>` : "";
+    const conversa = l.conversa_id ? `<button class="btn" data-conversa="${esc(l.conversa_id)}">Conversa</button>` : "";
+    return `<tr><td>${quando(l.recebido_em)}</td><td><strong>${esc(l.nome || "—")}</strong>${l.email ? `<div class="mut">${esc(l.email)}</div>` : ""}</td>
+      <td class="mono">${esc(l.telefone || "—")}</td><td>${esc(l.campanha || "—")}${l.ad_nome ? `<div class="mut">${esc(l.ad_nome)}</div>` : ""}</td>
+      <td style="font-size:12.5px">${resp || "—"}</td><td><span class="tag ${cls}">${esc(rot)}</span>${l.erro && !["pagou", "link", "respondeu", "contatado"].includes(l.etapa) ? `<div class="erro" style="font-size:12px">${esc(l.erro)}</div>` : ""}</td>
+      <td style="white-space:nowrap">${conversa} ${chamar}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhum lead recebido ainda.</td></tr>`;
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-chamar-lead]");
+  if (!b) return;
+  b.disabled = true;
+  try { await api(`/leads-meta/${encodeURIComponent(b.dataset.chamarLead)}/chamar`, { method: "POST" }); await carregarLeadsMeta(); }
+  catch (err) { alert(err.message); b.disabled = false; }
+});
+$("#formLeadTeste").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#msgLeadTeste").textContent = "Enviando…";
+  try {
+    const r = await api("/leads-meta/teste", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+    $("#msgLeadTeste").textContent = r.ok ? "Lead recebido e chamado no WhatsApp." : `Lead recebido, mas não foi chamado: ${r.erro || r.status}`;
+    await carregarLeadsMeta();
+  } catch (err) { $("#msgLeadTeste").textContent = err.message; }
+});
 function montarLinkCamp() {
   if (!camp) return;
   const f = $("#formLinkCamp"), [fonte, meio] = f.fonte.value.split("|");

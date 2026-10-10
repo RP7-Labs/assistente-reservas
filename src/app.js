@@ -3,6 +3,7 @@ import { responder, modoAssistente } from "./assistente.js";
 import { carregarHotel, montarLinkMotor } from "./catalogo.js";
 import { buscarLead, registrarClique, resumo, verificarBanco } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
+import { rotasLeadsMeta, modoLeadsMeta } from "./leadsMeta.js";
 import { admin } from "./admin.js";
 import { pagamento, rotaLembretes } from "./pagamento.js";
 import { configGetnet } from "./getnet.js";
@@ -14,7 +15,8 @@ import { modoFNRH, tarefasFNRH } from "./fnrh.js";
 import { configPublica, normalizarOrigem, registrarOrigem } from "./rastreio.js";
 
 export const app = express();
-app.use(express.json());
+// Guarda o corpo bruto para conferir a assinatura dos webhooks da Meta
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // Mostra o que já está configurado, sem expor valores
 app.get("/api/status", (_req, res) => {
@@ -60,6 +62,7 @@ app.get("/api/health", async (_req, res) => {
       ? { nome: "fnrh", estado: "pendente", detalhe: "fichas guardadas aqui, sem envio (falta FNRH_USUARIO, FNRH_SENHA, FNRH_CPF_SOLICITANTE)" }
       : { nome: "fnrh", estado: "ok", detalhe: `envio à FNRH Digital (${modoFNRH()})` },
     config("rastreio", "PUBLIC_URL"),
+    { nome: "leads_meta", ...modoLeadsMeta() },
   ];
   res.status(banco.ok ? 200 : 503).json({ ok: banco.ok, servicos, verificado_em: new Date().toISOString() });
 });
@@ -138,3 +141,4 @@ app.all("/api/tarefas/lembretes", async (req, res, next) => {
 }, rotaLembretes);
 
 rotasWhatsapp(app);
+rotasLeadsMeta(app);

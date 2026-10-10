@@ -1,6 +1,6 @@
 // Assistente sem IA: entende quarto, datas e pessoas por regras simples.
 // Funções puras: recebem o histórico de mensagens do hóspede e devolvem a resposta da última.
-import { validarPedido } from "./catalogo.js";
+import { validarPedido, precoTotal } from "./catalogo.js";
 import { sugerirPeriodo } from "./periodos.js";
 import { buscar, topicos, porTitulo } from "./conhecimento.js";
 
@@ -156,7 +156,9 @@ function botoes(campo, hotel, estado, hoje) {
     ];
   }
   if (campo === "checkout") {
-    return [1, 2, 3, 4].map((n) => op(`${plural(n, "noite")} · até ${br(somarDias(estado.checkin, n))}`, plural(n, "noite")))
+    const q = hotel.quartos.find((x) => x.id === estado.quarto);
+    const mes = !q || q.preco_mensal ? [op(`1 mês · até ${br(somarDias(estado.checkin, 30))}`, "1 mes")] : [];
+    return [1, 2, 3, 4].map((n) => op(`${plural(n, "noite")} · até ${br(somarDias(estado.checkin, n))}`, plural(n, "noite"))).concat(mes)
       .concat(op("Escolher data de saída", "", { tipo: "data", min: somarDias(estado.checkin, 1) }));
   }
   if (campo === "adultos") {
@@ -196,7 +198,10 @@ function aplicar(estado, texto, hotel, hoje) {
   const pessoas = extrairPessoas(resto);
   const quarto = extrairQuarto(t, hotel);
   let m;
-  const noites = (m = resto.match(new RegExp(`\\b${NUM}\\s+(?:noites?|diarias?|dias)\\b`))) ? valorNum(m[1]) : null;
+  let noites = (m = resto.match(new RegExp(`\\b${NUM}\\s+(?:noites?|diarias?|dias)\\b`))) ? valorNum(m[1]) : null;
+  // Estadia longa: "1 mês", "dois meses", "mensal"
+  if (!noites && (m = resto.match(new RegExp(`\\b${NUM}\\s+(?:mes|meses)\\b`)))) noites = 30 * valorNum(m[1]);
+  else if (!noites && /\b(mensal|mensalista|por mes|o mes (?:todo|inteiro)|mes inteiro)\b/.test(resto)) noites = 30;
 
   if (quarto) e.quarto = quarto;
   if (periodo) {
@@ -238,7 +243,7 @@ function aplicar(estado, texto, hotel, hoje) {
   if (INTENCOES.quartos.test(t) || t === "ver detalhes dos quartos") {
     intencao = "info";
     quartosListados = true;
-    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. A partir de ${reais(q.preco_a_partir)} a diária.`).join("\n"));
+    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. A partir de ${reais(q.preco_a_partir)} a diária.${q.preco_mensal ? ` Mensal: ${reais(q.preco_mensal)}.` : ""}`).join("\n"));
   } else if (INTENCOES.preco.test(t) && !entendeuAlgo) {
     intencao = "info";
     const q = hotel.quartos.find((x) => x.id === e.quarto);
@@ -295,8 +300,10 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
       const v = validarPedido(hotel, pedido, new Date(hoje + "T12:00:00Z"));
       if (v.ok) {
         const pessoas = `${plural(pedido.adultos, "adulto")}${pedido.criancas ? ` e ${plural(pedido.criancas, "criança", "crianças")}` : ""}`;
+        const total = precoTotal(v.quarto, v.noites);
+        const mensal = total !== v.quarto.preco_a_partir * v.noites ? ` (preço de estadia mensal: ${reais(v.quarto.preco_mensal)} por mês)` : "";
         partes.push(`${variar(["Perfeito!", "Prontinho!", "Tudo certo!"], i)} ${v.quarto.nome}, de ${diaSemana(pedido.checkin)} ${br(pedido.checkin)} a ${diaSemana(checkout)} ${br(checkout)} (${plural(v.noites, "noite")}), ${pessoas}.\n` +
-          `Total a partir de ${reais(v.quarto.preco_a_partir * v.noites)}.\nPara garantir, finalize por este link: {link}`);
+          `Total a partir de ${reais(total)}${mensal}.\nPara garantir, finalize por este link: {link}`);
         acao = { tipo: "link", pedido };
         estado = vazio();
         opcoes = [op("Tirar uma dúvida", "Dúvidas sobre o hotel"), op("Fazer outra reserva", "nova reserva"), op("Falar com atendente")];

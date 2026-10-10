@@ -2,7 +2,7 @@
 // (src/getnet.js); sem elas, tudo é simulado e nada é cobrado.
 import crypto from "node:crypto";
 import express from "express";
-import { carregarHotel } from "./catalogo.js";
+import { carregarHotel, precoTotal } from "./catalogo.js";
 import { buscarLead, buscarPagamento, salvarPagamento, salvarReserva, listarDados, pagamentosSemLembrete } from "./store.js";
 import { disponibilidade } from "./backoffice.js";
 import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
@@ -67,7 +67,7 @@ export function resumoPedido(hotel, lead) {
   return {
     lead_id: lead.id, hotel: hotel.nome, quarto: quarto?.nome ?? lead.quarto_id, quarto_id: lead.quarto_id,
     checkin: lead.checkin, checkout: lead.checkout, noites, adultos: lead.adultos, criancas: lead.criancas,
-    diaria: quarto?.preco_a_partir ?? 0, total: (quarto?.preco_a_partir ?? 0) * noites,
+    diaria: quarto?.preco_a_partir ?? 0, total: precoTotal(quarto, noites), mensal: Boolean(quarto?.preco_mensal && precoTotal(quarto, noites) !== (quarto?.preco_a_partir ?? 0) * noites),
   };
 }
 
