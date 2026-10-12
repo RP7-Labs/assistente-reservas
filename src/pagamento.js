@@ -10,7 +10,9 @@ import { disponibilidade } from "./backoffice.js";
 import { sincronizarCanais, bloqueiosOuNada } from "./canais.js";
 import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
-import { garantirCheckin, textoLinkCheckin, linkCheckin } from "./checkin.js";
+import { garantirCheckin, linkCheckin } from "./checkin.js";
+import { linkGuia, textoLinkGuia } from "./guia.js";
+import { enviar as enviarWhatsapp } from "./whatsapp.js";
 import { enviarMeta } from "./rastreio.js";
 import * as getnet from "./getnet.js";
 
@@ -120,8 +122,15 @@ async function emailReserva(hotel, lead, pag, ck, base) {
   await enviarEmail({
     para: pag.email, tipo: "reserva_confirmada", leadId: lead.id,
     assunto: `Reserva ${pag.codigo_reserva} confirmada – ${hotel.nome}`,
-    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkCheckin(base, ck.token)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${avisoTeste(pag)}`,
+    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkGuia(base, ck.token, hotel.guia?.marca ?? hotel.nome)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${avisoTeste(pag)}`,
   });
+}
+
+// Quem reservou pelo WhatsApp recebe o link do guia na mesma conversa (dentro da janela de 24 horas dela)
+async function whatsappReserva(hotel, lead, pag, ck, base) {
+  if (!ck || !String(lead.conversa_id ?? "").startsWith("wa:")) return;
+  const texto = `Reserva ${pag.codigo_reserva} confirmada, ${String(pag.nome ?? "").split(" ")[0]}! 🎉\n\n${textoLinkGuia(base, ck.token, hotel.guia?.marca ?? hotel.nome)}`;
+  await enviarWhatsapp(lead.conversa_id.slice(3), { type: "text", text: { body: texto, preview_url: true } });
 }
 
 // Confirma a reserva depois do pagamento aprovado e manda os dois e-mails: pagamento e reserva
@@ -137,10 +146,11 @@ export async function confirmar(hotel, lead, pag, campos, base) {
   const ck = await garantirCheckin(codigo).catch((err) => { console.error("check-in:", err.message); return null; });
   await emailPagamento(hotel, lead, salvo, salvo.status);
   await emailReserva(hotel, lead, salvo, ck, base);
+  await whatsappReserva(hotel, lead, salvo, ck, base).catch((err) => console.error("WhatsApp da reserva:", err.message));
   // Conversão para a Meta (o navegador manda a mesma com o Pixel; o event_id evita contar duas vezes)
   await enviarMeta({ evento: "Purchase", eventId: codigo, leadId: lead.id, valor: r.total, pessoa: salvo, url: `${base}/pagamento` })
     .catch((err) => console.error("Meta:", err.message));
-  return { ...salvo, link_checkin: ck ? linkCheckin(base, ck.token) : null };
+  return { ...salvo, link_checkin: ck ? linkCheckin(base, ck.token) : null, link_guia: ck ? linkGuia(base, ck.token) : null };
 }
 
 // Envia o e-mail com o link de pagamento para quem não pagou em MINUTOS_LEMBRETE minutos
@@ -206,7 +216,7 @@ pagamento.get("/:lead", rota(async (req, res) => {
   const p = pag && { status: pag.status, metodo: pag.metodo, nome: pag.nome, email: pag.email, codigo_reserva: pag.codigo_reserva, cartao_final: pag.cartao_final, cartao_bandeira: pag.cartao_bandeira };
   // O link do pré-check-in aparece na tela quando a confirmação chega pela notificação da Getnet
   const ck = pag?.codigo_reserva && FINAIS.has(pag.status) ? await garantirCheckin(pag.codigo_reserva).catch(() => null) : null;
-  if (p && ck) p.link_checkin = linkCheckin(urlBase(req), ck.token);
+  if (p && ck) { p.link_checkin = linkCheckin(urlBase(req), ck.token); p.link_guia = linkGuia(urlBase(req), ck.token); }
   res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
 }));
 
@@ -249,7 +259,7 @@ pagamento.post("/:lead/cartao", rota(async (req, res) => {
     metodo: "cartao", status: "pre_autorizado", provedor: "simulado", cartao_final: v.final, cartao_bandeira: v.bandeira,
     autorizacao: crypto.randomBytes(3).toString("hex").toUpperCase(),
   }, urlBase(req));
-  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
+  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin, link_guia: pag.link_guia });
 }));
 
 // Cartão (Getnet): devolve os dados para a página abrir o Checkout Iframe da Getnet
@@ -299,7 +309,7 @@ pagamento.post("/:lead/pix/simular", rota(async (req, res) => {
   if (!c || !(await prontoParaPagar(c, res))) return;
   if (!c.pag.pix_txid) return res.status(400).json({ erro: "Gere o Pix primeiro." });
   const pag = await confirmar(c.hotel, c.lead, c.pag, { metodo: "pix", status: "pago" }, urlBase(req));
-  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin });
+  res.json({ ok: true, status: pag.status, codigo_reserva: pag.codigo_reserva, link_checkin: pag.link_checkin, link_guia: pag.link_guia });
 }));
 
 // Notificação da Getnet (GET com os dados na query). A Getnet não assina a notificação, então:

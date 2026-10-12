@@ -148,3 +148,12 @@ O sistema atende vários hotéis no mesmo deploy, cada um com os próprios dados
 - **Chaves:** as variáveis de ambiente (Getnet, WhatsApp, Meta, TTLock, FNRH) valem só para o hotel `principal`. Outros hotéis ficam simulados até a fase de chaves por hotel. Getnet e FNRH só ligam para hotéis do Brasil.
 
 Plano das próximas fases em `/mnt/project-files/avaliacoes/plano-multitenant.md`.
+
+## Guia da estadia (`/estadia?c=<token>`)
+
+Página pessoal do hóspede, pensada para o celular, com o mesmo token do pré-check-in. Mostra nome, datas, quarto, contagem até a chegada e, depois do pré-check-in, o número do quarto e a senha da porta. Traz também check-in e check-out, Wi-Fi com botão de copiar, regras, estrutura com fotos, como chegar, passeios e restaurantes com link para o Google Maps, contato pelo WhatsApp e avaliação no Google.
+
+- O link vai no e-mail da reserva confirmada e, para quem reservou pelo WhatsApp, na mesma conversa. No back-office, a aba Check-in copia ou reenvia o link.
+- O conteúdo é a chave `guia` do hotel (`data/hotel.json` no hotel principal, `config.guia` nos outros). Fotos em `public/guia/<hotel>/`.
+- A senha do Wi-Fi vem de `guia.wifi.senha` ou da variável `WIFI_SENHA`, para não ficar no repositório.
+- Estacionamento usa o valor da alta temporada (dezembro a março, ou `guia.meses_alta`) pela data de entrada.

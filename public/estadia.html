@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2a7a">
+<meta name="robots" content="noindex">
+<title>Sua estadia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #1d2a7a; --navy-2: #26359a; --navy-50: #eef0fb; --verde: #2bb94a; --verde-50: #e8f8ec;
+    --ink: #121735; --ink-2: #3b4163; --muted: #6b7090; --bg: #f5f3ef; --card: #fff; --linha: #e7e4dd;
+    --raio: 18px; --sombra: 0 1px 2px rgba(18,23,53,.06), 0 6px 20px rgba(18,23,53,.06);
+    --fonte: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--fonte) }
+  a { color: inherit }
+  button { font: inherit; color: inherit }
+  svg { width: 22px; height: 22px; flex: none }
+  .app { max-width: 520px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(84px + env(safe-area-inset-bottom)) }
+
+  /* Topo */
+  .hero { position: relative; color: #fff; padding: calc(18px + env(safe-area-inset-top)) 20px 64px; background: var(--navy) center/cover no-repeat; border-radius: 0 0 28px 28px; overflow: hidden }
+  .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(29,42,122,.55), rgba(29,42,122,.92) 70%) }
+  .hero > * { position: relative }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .02em }
+  .selo { width: 38px; height: 38px; border-radius: 10px; background: #fff; color: var(--navy); display: grid; place-items: center; font: 900 22px/1 var(--fonte); font-style: italic; box-shadow: inset 0 -9px 0 var(--verde) }
+  .marca small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .22em; color: #9fe3ae }
+  .ola { font-size: 28px; line-height: 1.15; font-weight: 800; margin: 26px 0 6px }
+  .fase { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); padding: 6px 12px; border-radius: 999px; font-size: 13.5px; font-weight: 600 }
+  .fase i { width: 8px; height: 8px; border-radius: 50%; background: #6ff08c; box-shadow: 0 0 0 4px rgba(111,240,140,.2) }
+
+  .conteudo { padding: 0 16px; margin-top: -44px; position: relative }
+  .card { background: var(--card); border-radius: var(--raio); box-shadow: var(--sombra); padding: 18px; margin-bottom: 14px }
+  .datas { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px }
+  .datas .rot { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+  .datas .dia { font-size: 19px; font-weight: 800; color: var(--navy) }
+  .datas .hora { font-size: 13px; color: var(--ink-2) }
+  .datas .seta { color: var(--muted) }
+  .datas > div:last-child { text-align: right }
+  .linha-info { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--linha) }
+  .chip { background: var(--navy-50); color: var(--navy); font-size: 12.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px }
+
+  /* Acesso */
+  .acesso h2, .secao h2 { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px }
+  .chave { display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; align-items: end }
+  .chave .rot { font-size: 12.5px; color: var(--muted); font-weight: 600 }
+  .chave .quarto { font-size: 34px; font-weight: 800; color: var(--navy); line-height: 1 }
+  .senha { font: 800 34px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer }
+  .vale { font-size: 13px; color: var(--ink-2); margin: 12px 0 0 }
+  .aviso { font-size: 12.5px; color: #8a5a00; background: #fff4dc; border-radius: 10px; padding: 8px 12px; margin-top: 10px }
+  .cta { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; border: 0; border-radius: 14px; background: var(--verde); color: #fff; font-weight: 800; font-size: 16px; text-decoration: none; box-shadow: 0 6px 16px rgba(43,185,74,.32) }
+  .cta.navy { background: var(--navy); box-shadow: 0 6px 16px rgba(29,42,122,.25) }
+  .acesso p { margin: 0 0 14px; color: var(--ink-2) }
+
+  /* Atalhos e grade */
+  .atalhos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px }
+  .atalho { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 6px; border-radius: 16px; background: var(--card); box-shadow: var(--sombra); text-decoration: none; font-size: 13px; font-weight: 700; border: 0; cursor: pointer }
+  .atalho span.ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--verde-50); color: #1a8f35 }
+  .grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; background: var(--navy); border-radius: 22px; padding: 16px 12px; margin-bottom: 14px }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 4px; border-radius: 14px; color: #fff; text-decoration: none; font-size: 12.5px; font-weight: 700; text-align: center; background: none; border: 0; cursor: pointer; min-width: 0; line-height: 1.2 }
+  .item:active, .atalho:active { transform: scale(.97) }
+  .item svg { width: 30px; height: 30px }
+  .avaliar { text-align: center }
+  .estrelas { color: #f5b301; font-size: 26px; letter-spacing: 4px; margin: 4px 0 10px }
+
+  /* Seções */
+  .barra { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; background: var(--navy); color: #fff }
+  .barra button { width: 42px; height: 42px; border-radius: 12px; border: 0; background: rgba(255,255,255,.12); color: #fff; display: grid; place-items: center; cursor: pointer }
+  .barra h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: .02em }
+  .secao { padding: 16px }
+  .grande { font-size: 44px; font-weight: 800; color: var(--navy); line-height: 1; margin: 2px 0 8px }
+  .lista { list-style: none; margin: 0; padding: 0 }
+  .lista li { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--linha) }
+  .lista li:first-child { border-top: 0; padding-top: 0 }
+  .lista li b { display: block }
+  .lista li span { color: var(--ink-2); font-size: 14px }
+  .marcador { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--navy-50); color: var(--navy); font-weight: 800; font-size: 13px }
+  .marcador svg { width: 16px; height: 16px }
+  .marcador.ok { background: var(--verde-50); color: #1a8f35 }
+  .copiar { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 14px 16px; border: 1.5px solid var(--linha); border-radius: 14px; background: #fff; cursor: pointer; text-align: left; margin-bottom: 10px }
+  .copiar small { display: block; font-size: 12px; color: var(--muted); font-weight: 600 }
+  .copiar strong { font-size: 18px }
+  .copiar em { font-style: normal; font-size: 13px; color: var(--navy); font-weight: 700 }
+  .foto { display: grid; grid-template-columns: 76px 1fr; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--linha) }
+  .foto:first-of-type { border-top: 0 }
+  .foto img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; background: var(--navy-50) }
+  .foto b { display: block; color: var(--navy) }
+  .foto span { font-size: 14px; color: var(--ink-2) }
+  .lugar { display: block; padding: 14px 0; border-top: 1px solid var(--linha); text-decoration: none }
+  .lugar:first-of-type { border-top: 0; padding-top: 0 }
+  .lugar b { color: var(--navy); font-size: 16px }
+  .lugar p { margin: 2px 0 6px; font-size: 14px; color: var(--ink-2) }
+  .lugar .end { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--muted) }
+  .lugar .end svg { width: 16px; height: 16px; color: #e24b4b; margin-top: 2px }
+  .tag { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; background: var(--verde-50); color: #1a8f35; margin-left: 6px; vertical-align: 2px }
+  .contato a { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--linha); text-decoration: none; font-weight: 600 }
+  .contato a:first-of-type { border-top: 0; padding-top: 0 }
+  .contato a span.ic { width: 40px; height: 40px; border-radius: 12px; background: var(--navy-50); color: var(--navy); display: grid; place-items: center }
+
+  /* Barra de baixo */
+  .abas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--linha); padding-bottom: env(safe-area-inset-bottom) }
+  .abas nav { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr) }
+  .abas a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 0 10px; font-size: 11.5px; font-weight: 700; color: var(--muted); text-decoration: none }
+  .abas a.ativo { color: var(--navy) }
+  .abas a.zap { color: #1a8f35 }
+
+  .vazio { padding: 80px 24px; text-align: center; color: var(--ink-2) }
+  .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none }
+  .toast.on { opacity: 1 }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+</head>
+<body>
+<div class="app" id="app"><div class="vazio">Carregando sua estadia…</div></div>
+<div class="abas" id="abas" hidden><nav>
+  <a href="#" data-aba=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/></svg>Início</a>
+  <a href="#checkin" data-aba="checkin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M17 6l3 3M14 9l2 2"/></svg>Acesso</a>
+  <a href="#wifi" data-aba="wifi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>Wi-Fi</a>
+  <a id="abaZap" class="zap" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5 5 16a8.5 8.5 0 1 1 3.3 3.2z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.4-2-1-1 .8a4 4 0 0 1-2.1-2.1l.8-1-1-2z"/></svg>WhatsApp</a>
+</nav></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const token = new URLSearchParams(location.search).get("c");
+let g = null;
+
+const I = {
+  chave: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M17 6l3 3M14 9l2 2"/>',
+  mala: '<rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 7V4h6v3M9 11v5M15 11v5"/>',
+  casa: '<path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/>',
+  wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>',
+  regras: '<path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="m9 13 2 2 4-4"/>',
+  carro: '<path d="M5 16h14v-4l-2-5H7l-2 5z"/><circle cx="8" cy="16.5" r="1.5"/><circle cx="16" cy="16.5" r="1.5"/><path d="M5 12h14"/>',
+  ferramenta: '<path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8M9.3 6.3 4 1 1 4l5.3 5.3"/><path d="M3 21l6-6"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  pino: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  talher: '<path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5M17 21V3c-2 1-3 4-3 7h3"/>',
+  fone: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z"/>',
+  zap: '<path d="M3.5 20.5 5 16a8.5 8.5 0 1 1 3.3 3.2z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.4-2-1-1 .8a4 4 0 0 1-2.1-2.1l.8-1-1-2z"/>',
+  email: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  insta: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".5"/>',
+  voltar: '<path d="m15 18-6-6 6-6"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  copiar: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  seta: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+};
+const ic = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+
+const SECOES = {
+  checkin: ["Check-in", "chave"], checkout: ["Check-out", "mala"], estrutura: ["Estrutura", "casa"],
+  wifi: ["Wi-Fi", "wifi"], regras: ["Regras", "regras"], transporte: ["Como chegar", "carro"],
+  utilidades: ["Utilidades", "ferramenta"], passeios: ["Passeios", "camera"], informacoes: ["Informações", "info"],
+  restaurantes: ["Restaurantes", "talher"], contato: ["Contato", "fone"],
+};
+const GRADE = ["checkin", "checkout", "estrutura", "wifi", "regras", "transporte", "utilidades", "passeios", "informacoes", "restaurantes", "contato"];
+
+const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const dataCurta = (s) => { const d = new Date(s + "T12:00:00"); return `${DIAS[d.getDay()]}, ${d.getDate()} ${MESES[d.getMonth()]}`; };
+const hora = (h) => String(h ?? "").replace(/^0/, "").replace(":00", "h").replace(":", "h");
+const quando = (iso) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const reais = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+
+function zap(texto) {
+  const n = g.contato?.whatsapp; if (!n) return null;
+  return `https://wa.me/${n}?text=${encodeURIComponent(texto ?? `Olá! Sou ${g.hospede.nome || "hóspede"}, reserva ${g.reserva.codigo}.`)}`;
+}
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 1800); }
+async function copiar(v, rotulo) {
+  try { await navigator.clipboard.writeText(v); toast(`${rotulo} copiad${rotulo.endsWith("a") ? "a" : "o"}`); }
+  catch { prompt(rotulo, v); }
+}
+
+function fase() {
+  const r = g.reserva;
+  if (!r.ativa) return "Reserva cancelada";
+  return {
+    antes: r.faltam === 1 ? "Falta 1 dia para sua chegada" : `Faltam ${r.faltam} dias para sua chegada`,
+    chegada: `Hoje é o dia! Check-in a partir das ${hora(g.hotel.checkin)}`,
+    durante: `Noite ${r.noite} de ${r.noites}. Aproveite!`,
+    saida: `Check-out hoje até as ${hora(g.hotel.checkout)}`,
+    depois: "Obrigado pela estadia!",
+  }[r.fase];
+}
+
+function cartaoAcesso() {
+  const a = g.acesso, r = g.reserva;
+  if (!r.ativa || r.fase === "depois") return "";
+  if (a.senha) return `<section class="card acesso"><h2>Seu acesso</h2>
+    <div class="chave"><span class="rot">Quarto</span><span class="rot">Senha da porta</span>
+      <span class="quarto">${esc(a.unidade ?? "–")}</span><button class="senha" data-copiar="${esc(a.senha)}" data-rotulo="Senha" aria-label="Copiar senha">${esc(a.senha)}</button></div>
+    <p class="vale">Vale de ${quando(a.inicio)} até ${quando(a.fim)}. Digite no teclado da fechadura e confirme.</p>
+    ${a.simulada ? '<div class="aviso">Ambiente de testes: esta senha ainda não está na fechadura.</div>' : ""}</section>`;
+  if (a.concluido) return `<section class="card acesso"><h2>Seu acesso</h2><p>Check-in feito! A recepção entrega o acesso ao quarto na sua chegada.</p></section>`;
+  return `<section class="card acesso"><h2>Seu acesso</h2>
+    <p>${esc(a.texto ?? "")} Faça o pré-check-in pelo celular: leva 2 minutos e a senha aparece aqui.</p>
+    <a class="cta" href="${esc(g.link_checkin)}">${ic("chave")}Fazer pré-check-in</a></section>`;
+}
+
+function inicio() {
+  const r = g.reserva, h = g.hotel;
+  const pessoas = [plural(r.adultos ?? 1, "adulto", "adultos"), r.criancas ? plural(r.criancas, "criança", "crianças") : ""].filter(Boolean).join(" e ");
+  const avaliar = g.avaliacao_url && ["saida", "depois", "durante"].includes(r.fase) ? `<section class="card avaliar"><h2 style="font-size:17px;margin:0;color:var(--navy)">Gostou da estadia?</h2>
+    <div class="estrelas">★★★★★</div><p style="margin:0 0 14px;color:var(--ink-2)">Sua avaliação ajuda muito um hotel pequeno como o nosso.</p>
+    <a class="cta navy" href="${esc(g.avaliacao_url)}" target="_blank" rel="noopener">Avaliar no Google</a></section>` : "";
+  return `<header class="hero" style="background-image:url('${esc(h.fotos?.capa ?? "")}')">
+      <div class="marca"><span class="selo">R</span><span>${esc(h.nome)}<small>GUIA DA ESTADIA</small></span></div>
+      <div class="ola">${g.hospede.primeiro_nome ? `Olá, ${esc(g.hospede.primeiro_nome)}!` : "Bem-vindo!"}</div>
+      <span class="fase"><i></i>${esc(fase())}</span>
+    </header>
+    <div class="conteudo">
+      <section class="card">
+        <div class="datas">
+          <div><div class="rot">Entrada</div><div class="dia">${dataCurta(r.checkin)}</div><div class="hora">a partir das ${hora(h.checkin)}</div></div>
+          <div class="seta">${ic("seta")}</div>
+          <div><div class="rot">Saída</div><div class="dia">${dataCurta(r.checkout)}</div><div class="hora">até as ${hora(h.checkout)}</div></div>
+        </div>
+        <div class="linha-info"><span class="chip">${esc(r.quarto)}</span><span class="chip">${plural(r.noites, "noite", "noites")}</span><span class="chip">${esc(pessoas)}</span><span class="chip">Reserva ${esc(r.codigo)}</span></div>
+      </section>
+      ${cartaoAcesso()}
+      <div class="atalhos">
+        ${zap() ? `<a class="atalho" href="${esc(zap())}" target="_blank" rel="noopener"><span class="ic">${ic("zap")}</span>WhatsApp</a>` : ""}
+        ${h.mapa ? `<a class="atalho" href="${esc(h.mapa)}" target="_blank" rel="noopener"><span class="ic">${ic("pino")}</span>Como chegar</a>` : ""}
+        ${g.wifi ? `<a class="atalho" href="#wifi"><span class="ic">${ic("wifi")}</span>Wi-Fi</a>` : ""}
+      </div>
+      <nav class="grade" aria-label="Guia">${GRADE.filter(temSecao).map((k) => `<a class="item" href="#${k}">${ic(SECOES[k][1])}${SECOES[k][0]}</a>`).join("")}</nav>
+      ${avaliar}
+    </div>`;
+}
+
+function temSecao(k) {
+  return ({ wifi: g.wifi, estrutura: g.estrutura.length, regras: g.regras.length, transporte: g.transporte || g.hotel.endereco, utilidades: g.utilidades.length,
+    passeios: g.passeios.length, informacoes: g.informacoes.length, restaurantes: g.restaurantes.length, contato: g.contato })[k] ?? true;
+}
+
+const lista = (itens, marca = "check") => `<ul class="lista">${itens.map((x, i) => `<li><span class="marcador ${marca === "check" ? "ok" : ""}">${marca === "num" ? i + 1 : ic("check")}</span><div><b>${esc(x.titulo ?? x)}</b>${x.texto ? `<span>${esc(x.texto)}</span>` : ""}</div></li>`).join("")}</ul>`;
+const lugar = (p) => `<a class="lugar" href="${esc(p.mapa)}" target="_blank" rel="noopener"><b>${esc(p.titulo)}</b>${p.gratis ? '<span class="tag">Grátis</span>' : ""}${p.refeicao ? `<span class="tag">${esc(p.refeicao)}</span>` : ""}
+  ${p.texto ? `<p>${esc(p.texto)}</p>` : ""}<span class="end">${ic("pino")}${esc(p.endereco)}</span></a>`;
+
+const PAGINAS = {
+  checkin: () => `${cartaoAcesso()}<section class="card"><h2>Horário</h2><div class="grande">${hora(g.hotel.checkin)}</div><p style="margin:0;color:var(--ink-2)">${esc(g.checkin.obs ?? "")}</p></section>
+    ${g.estacionamento ? `<section class="card"><h2>Estacionamento</h2><p style="margin:0 0 8px">${esc(g.estacionamento.texto)}</p>
+      <div class="grande" style="font-size:30px">${reais(g.estacionamento.valor)}<span style="font-size:14px;color:var(--muted);font-weight:600"> por diária</span></div>
+      <p style="margin:0;font-size:13px;color:var(--muted)">Baixa temporada ${reais(g.estacionamento.baixa_valor)} · alta temporada e feriados ${reais(g.estacionamento.alta_valor)}</p></section>` : ""}`,
+  checkout: () => `<section class="card"><h2>Horário</h2><div class="grande">${hora(g.hotel.checkout)}</div><p style="margin:0;color:var(--ink-2)">${esc(g.checkout.obs ?? "")}</p></section>
+    <section class="card"><h2>Antes de sair</h2>${lista(g.checkout.lista)}</section>`,
+  estrutura: () => `<section class="card">${g.estrutura.map((e) => `<div class="foto">${e.foto ? `<img src="${esc(e.foto)}" alt="" loading="lazy">` : "<span></span>"}<div><b>${esc(e.titulo)}</b><span>${esc(e.texto)}</span></div></div>`).join("")}</section>`,
+  wifi: () => `<section class="card"><h2>Conecte-se</h2>
+    <button class="copiar" data-copiar="${esc(g.wifi.rede)}" data-rotulo="Rede"><span><small>Rede</small><strong>${esc(g.wifi.rede)}</strong></span><em>${ic("copiar")}</em></button>
+    ${g.wifi.senha ? `<button class="copiar" data-copiar="${esc(g.wifi.senha)}" data-rotulo="Senha"><span><small>Senha</small><strong>${esc(g.wifi.senha)}</strong></span><em>${ic("copiar")}</em></button>` : `<p style="color:var(--ink-2)">A senha está na recepção e no seu quarto.</p>`}
+    </section>${g.wifi.dicas.length ? `<section class="card"><h2>Não conectou?</h2>${lista(g.wifi.dicas)}</section>` : ""}`,
+  regras: () => `<section class="card"><p style="margin:0 0 14px;color:var(--ink-2)">Obrigado por respeitar nossas orientações e ajudar a manter a estadia tranquila para todos.</p>${lista(g.regras, "num")}</section>`,
+  transporte: () => `<section class="card"><h2>Endereço</h2><p style="margin:0 0 14px;font-weight:700">${esc(g.hotel.endereco ?? "")}</p>${g.hotel.mapa ? `<a class="cta navy" href="${esc(g.hotel.mapa)}" target="_blank" rel="noopener">${ic("pino")}Abrir no Google Maps</a>` : ""}</section>
+    ${g.transporte?.aeroportos?.length ? `<section class="card"><h2>Do aeroporto</h2>${lista(g.transporte.aeroportos)}</section>` : ""}
+    ${g.transporte?.local ? `<section class="card"><h2>Pela cidade</h2><p style="margin:0">${esc(g.transporte.local)}</p></section>` : ""}`,
+  utilidades: () => `<section class="card">${lista(g.utilidades)}</section>`,
+  passeios: () => {
+    const pagos = g.passeios.filter((p) => !p.gratis), gratis = g.passeios.filter((p) => p.gratis);
+    return `${pagos.length ? `<section class="card"><h2>Atrações</h2>${pagos.map(lugar).join("")}</section>` : ""}${gratis.length ? `<section class="card"><h2>De graça</h2>${gratis.map(lugar).join("")}</section>` : ""}`;
+  },
+  informacoes: () => `<section class="card">${lista(g.informacoes)}</section>`,
+  restaurantes: () => `<section class="card"><h2>Nossas recomendações</h2>${g.restaurantes.map(lugar).join("")}</section>`,
+  contato: () => {
+    const c = g.contato ?? {};
+    const tel = (n) => String(n).replace(/^55(\d\d)(\d{4,5})(\d{4})$/, "($1) $2-$3");
+    return `<section class="card contato"><p style="margin:0 0 14px;color:var(--ink-2)">Estamos à disposição para o que você precisar.</p>
+      ${c.whatsapp ? `<a href="${esc(zap())}" target="_blank" rel="noopener"><span class="ic">${ic("zap")}</span>WhatsApp ${esc(tel(c.whatsapp))}</a>` : ""}
+      ${c.telefone ? `<a href="tel:+${esc(c.telefone)}"><span class="ic">${ic("fone")}</span>${esc(tel(c.telefone))}</a>` : ""}
+      ${c.email ? `<a href="mailto:${esc(c.email)}"><span class="ic">${ic("email")}</span>${esc(c.email)}</a>` : ""}
+      ${c.instagram ? `<a href="https://instagram.com/${esc(c.instagram)}" target="_blank" rel="noopener"><span class="ic">${ic("insta")}</span>@${esc(c.instagram)}</a>` : ""}
+    </section>${g.avaliacao_url ? `<section class="card avaliar"><h2>Nos avalie</h2><div class="estrelas">★★★★★</div><a class="cta navy" href="${esc(g.avaliacao_url)}" target="_blank" rel="noopener">Avaliar no Google</a></section>` : ""}`;
+  },
+};
+
+function render() {
+  const k = location.hash.slice(1);
+  const app = $("#app");
+  if (k && PAGINAS[k] && temSecao(k)) {
+    app.innerHTML = `<div class="barra"><button onclick="history.length > 1 ? history.back() : (location.hash = '')" aria-label="Voltar">${ic("voltar")}</button><h1>${SECOES[k][0]}</h1></div><div class="secao">${PAGINAS[k]()}</div>`;
+  } else {
+    app.innerHTML = inicio();
+  }
+  document.title = `${k && SECOES[k] ? SECOES[k][0] + " · " : ""}${g.hotel.nome}`;
+  document.querySelectorAll("#abas a[data-aba]").forEach((a) => a.classList.toggle("ativo", a.dataset.aba === (PAGINAS[k] ? k : "")));
+  scrollTo(0, 0);
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-copiar]");
+  if (b) copiar(b.dataset.copiar, b.dataset.rotulo || "Texto");
+});
+addEventListener("hashchange", render);
+
+(async () => {
+  try {
+    if (!token) throw new Error("Abra o link que enviamos para você por e-mail ou WhatsApp.");
+    const r = await fetch(`/api/checkin/${encodeURIComponent(token)}/estadia`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.erro || "Não encontramos esta estadia.");
+    g = d;
+    const z = zap();
+    if (z) $("#abaZap").href = z; else $("#abaZap").remove();
+    $("#abas").hidden = false;
+    render();
+  } catch (err) {
+    $("#app").innerHTML = `<div class="vazio"><b style="display:block;font-size:18px;color:var(--ink);margin-bottom:6px">Link não encontrado</b>${esc(err.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

@@ -589,7 +589,7 @@ async function carregarCheckin() {
     const [st, cor] = SENHA[r.senha_status] ?? ["—", ""];
     const senha = r.senha ? `<code style="font-size:16px;letter-spacing:.1em">${esc(r.senha)}</code> <span class="tag ${cor}">${st}</span>` : r.senha_status ? `<span class="tag ${cor}">${st}</span>` : `<span class="mut">—</span>`;
     const acoes = ativa ? [
-      `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="copiar">Copiar link</button>`,
+      `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="copiar">Copiar link do guia</button>`,
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="enviar">Enviar por e-mail</button>`,
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="senha">${r.senha ? "Trocar senha" : "Gerar senha"}</button>`,
       r.senha ? `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="revogar">Revogar</button>` : "",
@@ -641,7 +641,7 @@ document.addEventListener("click", async (e) => {
     if (acao === "ficha") return verFicha(t.dataset.ck);
     if (acao === "copiar" || acao === "enviar") {
       const r = await api(`/checkins/${cod}/link`, { method: "POST", body: JSON.stringify({ enviar: acao === "enviar" }) });
-      if (acao === "copiar") { try { await navigator.clipboard.writeText(r.link); t.textContent = "Copiado"; } catch { prompt("Link do check-in:", r.link); } }
+      if (acao === "copiar") { try { await navigator.clipboard.writeText(r.link); t.textContent = "Copiado"; } catch { prompt("Link do guia da estadia:", r.link); } }
       else alert(`Link enviado para ${r.enviado}.`);
     } else if (acao === "senha") {
       const r = await api(`/checkins/${cod}/senha`, { method: "POST" });

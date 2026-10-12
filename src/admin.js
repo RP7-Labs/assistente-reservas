@@ -13,7 +13,8 @@ import {
   listarOrigens, listarConversoes, listarConversasResumo,
 } from "./store.js";
 import { novoToken, urlValida } from "./ical.js";
-import { garantirCheckin, emitirSenha, revogarSenha, linkCheckin, textoLinkCheckin, OPCOES_FICHA } from "./checkin.js";
+import { garantirCheckin, emitirSenha, revogarSenha, OPCOES_FICHA } from "./checkin.js";
+import { linkGuia, textoLinkGuia } from "./guia.js";
 import { modoFechaduras } from "./fechaduras.js";
 import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
 import { fonte, csvGoogleAds, configMeta, configPublica } from "./rastreio.js";
@@ -337,7 +338,7 @@ admin.get("/checkins", rota(async (req, res) => {
       const c = porCodigo.get(r.codigo_motor);
       return {
         codigo: r.codigo_motor, quarto_id: r.quarto_id, checkin: r.checkin, checkout: r.checkout, hospede: r.hospede, status_reserva: r.status,
-        status: c?.status ?? null, link: c ? linkCheckin(baseUrl(req), c.token) : null, unidade: c?.unidade ?? null,
+        status: c?.status ?? null, link: c ? linkGuia(baseUrl(req), c.token) : null, unidade: c?.unidade ?? null,
         chegada_prevista: c?.chegada_prevista ?? null, hospedes: c?.hospedes ?? null, concluido_em: c?.concluido_em ?? null,
         fnrh_status: c?.fnrh_status ?? null, fnrh_erro: c?.fnrh_erro ?? null, fnrh_entrada_em: c?.fnrh_entrada_em ?? null, fnrh_saida_em: c?.fnrh_saida_em ?? null,
         senha: c?.senha ?? null, senha_status: c?.senha_status ?? null, senha_erro: c?.senha_erro ?? null, senha_inicio: c?.senha_inicio ?? null, senha_fim: c?.senha_fim ?? null,
@@ -346,20 +347,20 @@ admin.get("/checkins", rota(async (req, res) => {
   res.json({ pendente, modo: modoFechaduras(), modo_fnrh: modoFNRH(), unidades, reservas: lista, nomes: NOMES, quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome })) });
 }));
 
-// Cria (se preciso) o link de pré-check-in; com enviar=true manda por e-mail para quem pagou
+// Cria (se preciso) o link do guia da estadia, que leva também ao pré-check-in; com enviar=true manda por e-mail para quem pagou
 admin.post("/checkins/:codigo/link", rota(async (req, res) => {
   const reserva = await buscarReserva(req.params.codigo);
   if (!reserva) return res.status(404).json({ erro: "Reserva não encontrada" });
   const ck = await garantirCheckin(reserva.codigo_motor);
-  const link = linkCheckin(baseUrl(req), ck.token);
+  const link = linkGuia(baseUrl(req), ck.token);
   let enviado = null;
   if (req.body?.enviar) {
     const pag = reserva.lead_id && (await buscarPagamento(reserva.lead_id));
     if (!pag?.email) return res.status(400).json({ erro: "Esta reserva não tem e-mail. Copie o link e mande pelo WhatsApp.", link });
     const hotel = carregarHotel();
     await enviarEmail({
-      para: pag.email, tipo: "checkin_link", leadId: reserva.lead_id, assunto: `Faça seu check-in online – ${hotel.nome}`,
-      texto: `Olá, ${(pag.nome || "").split(" ")[0]}!\n\n${textoLinkCheckin(baseUrl(req), ck.token)}\n\n${hotel.nome}`,
+      para: pag.email, tipo: "checkin_link", leadId: reserva.lead_id, assunto: `Guia da sua estadia e check-in online – ${hotel.guia?.marca ?? hotel.nome}`,
+      texto: `Olá, ${(pag.nome || "").split(" ")[0]}!\n\n${textoLinkGuia(baseUrl(req), ck.token, hotel.guia?.marca ?? hotel.nome)}\n\n${hotel.guia?.marca ?? hotel.nome}`,
     });
     enviado = pag.email;
   }

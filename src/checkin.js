@@ -10,6 +10,7 @@ import { configTTLock, criarSenhaTTLock, apagarSenhaTTLock, novaSenha } from "./
 import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
 import { registrarFicha } from "./fnrh.js";
+import { montarGuia, linkGuia } from "./guia.js";
 
 const ATIVAS = new Set(["confirmada", "concluida"]);
 const br = (d) => String(d).slice(0, 10).split("-").reverse().join("/");
@@ -249,6 +250,16 @@ checkin.get("/:token", rota(async (req, res) => {
   });
 }));
 
+// Guia da estadia: dados da reserva e do hotel para a página /estadia
+checkin.get("/:token/estadia", rota(async (req, res) => {
+  const c = await carregar(req.params.token);
+  if (!c) return res.status(404).json({ erro: "Link da estadia não encontrado." });
+  const { ck, reserva, hotel } = c;
+  const quarto = hotel.quartos.find((q) => q.id === reserva.quarto_id);
+  res.set("Cache-Control", "no-store");
+  res.json({ ...montarGuia({ hotel, reserva, ck, quarto }), link_checkin: linkCheckin("", ck.token) });
+}));
+
 checkin.post("/:token", rota(async (req, res) => {
   const c = await carregar(req.params.token);
   if (!c) return res.status(404).json({ erro: "Link de check-in não encontrado." });
@@ -263,5 +274,5 @@ checkin.post("/:token", rota(async (req, res) => {
   await registrarFicha(reserva.codigo_motor).catch((err) => console.error("FNRH:", err.message));
   const final = await emitirSenha(reserva.codigo_motor);
   await emailSenha(hotel, reserva, final).catch((err) => console.error("e-mail do check-in:", err.message));
-  res.json({ ok: true });
+  res.json({ ok: true, link_guia: linkGuia("", ck.token) });
 }));
