@@ -42,6 +42,11 @@
       carregar(`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(cfg.google_ads)}`);
       gtag("js", new Date()); gtag("config", cfg.google_ads);
     }
+    if (cfg.gtm && !window.google_tag_manager) {
+      window.dataLayer = window.dataLayer || [];
+      dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+      carregar(`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(cfg.gtm)}`);
+    }
     fila.splice(0).forEach((f) => f());
   }
 
@@ -63,7 +68,7 @@
 
   fetch("/api/rastreio/config").then((r) => r.ok && r.json()).then((c) => {
     cfg = c;
-    if (!c || (!c.meta_pixel && !c.google_ads)) return;
+    if (!c || (!c.meta_pixel && !c.google_ads && !c.gtm)) return;
     const consent = ler(CONSENT);
     if (consent === "sim") ligarTags();
     else if (consent !== "nao") banner();
@@ -81,5 +86,27 @@
     window.fbq || window.gtag ? f() : fila.push(f);
   }
 
-  window.rastreio = { origem, evento };
+  // Id aleatório deste navegador, para contar visitantes por origem (sem dado pessoal)
+  function visitante() {
+    let v = ler("visitante");
+    if (!v) { v = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 36); gravar("visitante", v); }
+    return v;
+  }
+  function visita(pagina) {
+    const corpo = JSON.stringify({ visitante: visitante(), pagina, origem: origem() ?? (externo ? { referrer: externo } : {}) });
+    try { navigator.sendBeacon?.("/api/rastreio/visita", new Blob([corpo], { type: "application/json" })) || fetch("/api/rastreio/visita", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }); } catch { /* sem rede */ }
+  }
+  // Abre o WhatsApp do hotel com um código que liga a conversa à origem desta visita
+  async function whatsapp(texto) {
+    const janela = window.open("", "_blank");
+    try {
+      const r = await fetch("/api/rastreio/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto, origem: origem() ?? (externo ? { referrer: externo } : {}) }) });
+      const { link } = await r.json();
+      evento("Contact");
+      if (link) { if (janela) janela.location = link; else location.href = link; return; }
+    } catch { /* cai no fechamento abaixo */ }
+    janela?.close();
+  }
+
+  window.rastreio = { origem, evento, visita, whatsapp };
 })();

@@ -157,3 +157,15 @@ Página pessoal do hóspede, pensada para o celular, com o mesmo token do pré-c
 - O conteúdo é a chave `guia` do hotel (`data/hotel.json` no hotel principal, `config.guia` nos outros). Fotos em `public/guia/<hotel>/`.
 - A senha do Wi-Fi vem de `guia.wifi.senha` ou da variável `WIFI_SENHA`, para não ficar no repositório.
 - Estacionamento usa o valor da alta temporada (dezembro a março, ou `guia.meses_alta`) pela data de entrada.
+
+## Site do hotel (/site)
+
+- Página montada no servidor a partir do bloco `site` do `hotel.json` (textos, quartos, dúvidas), do catálogo e do `guia` (fotos, contato).
+- Botão "Reservar" e formulário de datas abrem o assistente numa gaveta, já com a pergunta da pessoa.
+- Rastreio: a origem da visita (UTM, gclid, fbclid, site de origem) fica no navegador e vai com a primeira mensagem do chat. O botão de WhatsApp leva um código (`cód. RSxxxxx`) que liga a conversa do WhatsApp à origem da visita. As visitas por origem aparecem na aba Campanhas. `GTM_ID` liga o Google Tag Manager depois do consentimento.
+- Migração: `db/013_site_senhas.sql` (visitas e senhas em várias fechaduras).
+
+## Senha da porta
+
+- O hóspede digita os números e termina com `#` (`guia.teclado_sufixo` no `hotel.json`).
+- Cadastre a fechadura da entrada do hotel como unidade do tipo "Entrada do hotel": a mesma senha do quarto é criada nela também, com a mesma validade, e apagada junto.

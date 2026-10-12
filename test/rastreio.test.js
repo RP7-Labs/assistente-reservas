@@ -99,7 +99,7 @@ test("chat guarda a origem enviada na primeira mensagem", async () => {
     assert.equal(o.utm_campaign, "reveillon");
     assert.equal(o.canal, "web");
     const cfg = await (await fetch(url.replace("/chat", "/rastreio/config"))).json();
-    assert.deepEqual(Object.keys(cfg).sort(), ["google_ads", "google_compra", "google_lead", "meta_pixel"]);
+    assert.deepEqual(Object.keys(cfg).sort(), ["google_ads", "google_compra", "google_lead", "gtm", "meta_pixel"]);
   } finally {
     srv.close();
   }

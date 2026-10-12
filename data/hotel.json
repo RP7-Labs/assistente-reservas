@@ -1,6 +1,6 @@
 {
-  "nome": "Hotel Piloto",
-  "cidade": "Cidade do Hotel",
+  "nome": "Rezende Suítes Hotel",
+  "cidade": "Balneário Camboriú - SC",
   "checkin": "14:00",
   "checkout": "11:00",
   "politicas": "Café da manhã incluso. Pets não aceitos. Cancelamento grátis até 48h antes.",
@@ -312,6 +312,116 @@
         "Rossetto",
         "Almoço",
         "3ª Avenida, 1747, Centro, Balneário Camboriú - SC"
+      ]
+    ],
+    "teclado_sufixo": "#"
+  },
+  "site": {
+    "_comentario": "Textos do site /site. Fontes: guia de boas-vindas (PDF), metadados de rezendesuites.com.br e a página da Expedia (out/2026). Confirmar com o Joel.",
+    "titulo": "Smart Studios e Suítes no Centro de Balneário Camboriú",
+    "subtitulo": "A 2 minutos da Praia Central, com coworking, rooftop e check-in pelo celular.",
+    "destaques": [
+      [
+        "praia",
+        "Perto da Praia Central",
+        "Cerca de 10 minutos a pé da praia e do Passeio San Miguel."
+      ],
+      [
+        "chave",
+        "Check-in pelo celular",
+        "Faça o pré-check-in e receba a senha da porta. Sem fila na recepção."
+      ],
+      [
+        "trabalho",
+        "Coworking",
+        "Espaço para trabalhar com conforto e Wi-Fi em todo o hotel."
+      ],
+      [
+        "vista",
+        "Rooftop",
+        "Vista para a cidade e para o Cristo Luz."
+      ]
+    ],
+    "quartos": [
+      {
+        "id": "estudio",
+        "nome": "Smart Studio",
+        "descricao": "Studio com cozinha compacta, cama de casal e mesa de trabalho. Ideal para temporadas e estadias mensais.",
+        "foto": "quarto",
+        "itens": [
+          "Cozinha compacta",
+          "Mesa de trabalho",
+          "Ar-condicionado",
+          "Wi-Fi"
+        ]
+      },
+      {
+        "id": "suite",
+        "nome": "Suíte",
+        "descricao": "Suíte com ar-condicionado, frigobar, cofre, TV e banheiro privativo.",
+        "foto": "quarto",
+        "itens": [
+          "Ar-condicionado",
+          "Frigobar",
+          "Cofre",
+          "TV"
+        ]
+      }
+    ],
+    "mensal": {
+      "titulo": "Studio mensal",
+      "texto": "Mora ou trabalha em Balneário Camboriú por um tempo? Alugue o Smart Studio por mês, com Wi-Fi e a estrutura do hotel. Pergunte o valor para o seu período.",
+      "mensagem": "Quero saber do Studio mensal"
+    },
+    "distancias": [
+      [
+        "Praia Central",
+        "10 min a pé"
+      ],
+      [
+        "Passeio San Miguel",
+        "11 min a pé"
+      ],
+      [
+        "Igreja Santa Inês",
+        "18 min a pé"
+      ],
+      [
+        "Aeroporto de Navegantes",
+        "45 min de carro"
+      ]
+    ],
+    "avaliacoes": {
+      "nota": "8,2",
+      "fonte": "Expedia",
+      "total": 114,
+      "url": "https://www.expedia.com/Itajai-Hotels-Rezende-Suites-Hotel.h15361552.Hotel-Information",
+      "destaque": "Equipe nota 9,0"
+    },
+    "faq": [
+      [
+        "Qual o horário de check-in e check-out?",
+        "Check-in a partir das 14h e check-out até as 11h. Quer chegar mais cedo? Fale com a gente."
+      ],
+      [
+        "Como entro no hotel?",
+        "Depois do pré-check-in você recebe uma senha. Ela abre a porta de entrada e a do seu quarto: digite os números e termine com #."
+      ],
+      [
+        "Tem estacionamento?",
+        "Sim, privativo e sujeito a disponibilidade: R$ 39 por dia na baixa temporada e R$ 59 na alta."
+      ],
+      [
+        "Tem café da manhã?",
+        "Sim, das 7h às 9h30, conforme a tarifa."
+      ],
+      [
+        "Aceitam animais?",
+        "Não aceitamos animais de estimação."
+      ],
+      [
+        "Criança paga?",
+        "Uma criança de até 5 anos fica de graça usando as camas existentes."
       ]
     ]
   }

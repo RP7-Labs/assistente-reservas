@@ -1,5 +1,5 @@
 import { responder } from "./assistente.js";
-import { origemWhatsapp, registrarOrigem } from "./rastreio.js";
+import { origemWhatsapp, registrarOrigem, origemDoCodigo } from "./rastreio.js";
 import { marcarRespostaLeadMeta } from "./store.js";
 import { envDoHotel, HOTEL_PADRAO } from "./tenant.js";
 import { noHotel, hotelPorIntegracao } from "./catalogo.js";
@@ -39,7 +39,8 @@ async function atenderMensagens(msgs) {
       if (!texto) continue;
       try {
         // Conversa aberta por anúncio de clique para o WhatsApp: guarda o anúncio e o ctwa_clid
-        const origem = origemWhatsapp(m);
+        // ou pelo botão do site (código "cód. RSxxxxx" no texto, com a origem da visita)
+        const origem = origemWhatsapp(m) ?? (await origemDoCodigo(texto));
         if (origem) await registrarOrigem(`wa:${m.from}`, "whatsapp", origem).catch((err) => console.error("origem:", err.message));
         // Lead de formulário da Meta que respondeu à primeira mensagem
         await marcarRespostaLeadMeta(`wa:${m.from}`).catch(() => {});

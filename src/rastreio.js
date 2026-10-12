@@ -17,6 +17,7 @@ export function configPublica(env = envDoHotel()) {
     google_ads: env.GOOGLE_ADS_ID || null,                 // AW-123456789
     google_compra: env.GOOGLE_ADS_ROTULO_COMPRA || null,   // rótulo da ação de conversão "Compra"
     google_lead: env.GOOGLE_ADS_ROTULO_LEAD || null,
+    gtm: /^GTM-[A-Z0-9]+$/.test(env.GTM_ID ?? "") ? env.GTM_ID : null,     // Google Tag Manager do site (GA4 etc.)
   };
 }
 
@@ -61,6 +62,28 @@ export function origemWhatsapp(m) {
   const r = m?.referral;
   if (!r) return null;
   return normalizarOrigem({ ctwa_clid: r.ctwa_clid, ad_id: r.source_type === "ad" ? r.source_id : null, utm_campaign: r.headline, landing: r.source_url });
+}
+
+// Código curto que o site põe no texto do WhatsApp (sem letras que se confundem)
+const LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const codigoWhatsapp = () => "RS" + Array.from(crypto.randomBytes(5), (b) => LETRAS[b % LETRAS.length]).join("");
+export const CODIGO_WA_RE = /\b(RS[A-HJ-NP-Z2-9]{5})\b/;
+
+export function linkWhatsappSite(hotel, codigo, texto) {
+  const numero = String(hotel.guia?.contato?.whatsapp ?? "").replace(/\D/g, "");
+  const msg = `${String(texto || "Olá! Quero fazer uma reserva.").slice(0, 300)} (cód. ${codigo})`;
+  return numero ? `https://wa.me/${numero}?text=${encodeURIComponent(msg)}` : null;
+}
+
+// Primeira mensagem do WhatsApp com o código do site: a conversa herda a origem da visita
+export async function origemDoCodigo(texto) {
+  const m = CODIGO_WA_RE.exec(String(texto ?? ""));
+  if (!m) return null;
+  const o = await buscarOrigem(`ref:${m[1]}`).catch(() => null);
+  if (!o) return null;
+  const { conversa_id, hotel_id, criado_em, atualizado_em, canal, ...origem } = o;
+  // Sem campanha nem site de origem: veio direto ao site
+  return { ...origem, utm_source: origem.utm_source ?? (origem.referrer ? null : "site") };
 }
 
 // Fonte legível para os relatórios

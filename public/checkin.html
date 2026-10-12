@@ -31,6 +31,7 @@
   .menor { font-size: 12px; margin-left: 6px }
   .ok { text-align: center; padding: 28px 20px }
   .ok .icone { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 14px; background: var(--ok-50); color: var(--ok); display: grid; place-items: center; font-size: 32px; font-weight: 800 }
+  .senha .suf { color: var(--brand); margin-left: .08em }
   .senha { font: 800 40px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .18em; color: var(--ink); background: var(--surface-2); border-radius: 14px; padding: 18px 10px; margin: 10px 0 }
   .quarto { font-size: 15px; color: var(--muted) } .quarto b { color: var(--ink); font-size: 20px }
   .teste { background: var(--accent-50); color: var(--warn); border-radius: 12px; padding: 9px 14px; font-size: 13px; font-weight: 600; margin-top: 12px }
@@ -163,8 +164,8 @@ function mostrarPronto(a) {
   $("#titulo").textContent = "Tudo pronto!"; $("#subtitulo").textContent = "";
   $("#acesso").innerHTML = a?.senha
     ? `<p class="quarto">Seu quarto é o <b>${esc(a.unidade)}</b></p>
-       <p class="mut" style="margin:14px 0 0">Senha da porta</p><div class="senha">${esc(a.senha)}</div>
-       <p class="mut">Vale de ${hora(a.inicio)} até ${hora(a.fim)}. Digite no teclado da fechadura e confirme. Enviamos também para o seu e-mail.</p>
+       <p class="mut" style="margin:14px 0 0">${a.entrada ? "Senha da entrada e do quarto" : "Senha da porta"}</p><div class="senha">${esc(a.senha)}<span class="suf">${esc(a.sufixo ?? "")}</span></div>
+       <p class="mut">Vale de ${hora(a.inicio)} até ${hora(a.fim)}. Digite os números e termine com <b>${esc(a.sufixo || "a tecla de confirmar")}</b>.${a.entrada ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""} Enviamos também para o seu e-mail.</p>
        ${a.simulada ? `<div class="teste">Ambiente de testes: esta senha não foi gravada em nenhuma fechadura.</div>` : ""}`
     : `<p>Recebemos seus dados. A recepção entrega o acesso ao quarto na sua chegada.</p>`;
   $("#voltarGuia").href = `/estadia?c=${encodeURIComponent(token)}`;

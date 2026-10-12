@@ -17,7 +17,7 @@ const sb = usarSupabase
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "local.json");
-const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta"];
+const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta", "visitas"];
 const vazio = () => ({ ...Object.fromEntries(TABELAS.map((t) => [t, []])), conversas: {}, atendimentos: {} });
 
 // Sem Supabase, cada hotel tem o próprio arquivo (o hotel padrão usa o arquivo original)
@@ -528,4 +528,23 @@ export async function localizarHotel(tabela, campo, valor) {
   }
   const ids = [HOTEL_PADRAO, ...lerHoteisArquivo().map((h) => h.id).filter((id) => id !== HOTEL_PADRAO)];
   return ids.find((h) => (lerArquivo(h)[tabela] ?? []).some((x) => String(x[campo]) === String(valor))) ?? null;
+}
+
+// ---- Visitas do site (para o funil por origem: visitas → conversas → reservas) ----
+
+export async function registrarVisita(v) {
+  const linha = { criado_em: new Date().toISOString(), ...v };
+  if (sb) {
+    verificar(await tab("visitas").insert(linha));
+    return linha;
+  }
+  const db = lerArquivo();
+  db.visitas.push(linha);
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function listarVisitas(desde) {
+  if (sb) return verificar(await tab("visitas").select("visitante, utm_source, utm_campaign, referrer, criado_em").gte("criado_em", desde).limit(50000));
+  return lerArquivo().visitas.filter((v) => v.criado_em >= desde);
 }

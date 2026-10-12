@@ -151,6 +151,44 @@ test("senha na TTLock: cria com a janela certa e apaga ao revogar", async () => 
   assert.match(e.senha_erro, /gateway offline/);
 });
 
+test("mesma senha no quarto e na entrada do hotel; erro desfaz e tenta outra senha", async () => {
+  limparCacheToken();
+  await store.salvarReserva({ codigo_motor: "P-EN01", quarto_id: "suite", checkin: "2026-12-26", checkout: "2026-12-28", hospede: "Rui Lima", status: "confirmada" });
+  await store.salvarUnidade({ numero: "302", quarto_id: "suite", lock_id: "300302" });
+  await store.salvarUnidade({ numero: "Entrada", quarto_id: ck.ENTRADA, lock_id: "900001" });
+  let falharQuarto = 1, id = 0;
+  const chamadas = [];
+  const fakeFetch = async (url, op) => {
+    const campos = Object.fromEntries(new URLSearchParams(op.body));
+    chamadas.push({ url, campos });
+    if (url.endsWith("/oauth2/token")) return { ok: true, json: async () => ({ access_token: "tk", expires_in: 7776000 }) };
+    if (url.endsWith("/add") && campos.lockId !== "900001" && falharQuarto-- > 0) return { ok: true, json: async () => ({ errcode: -3007, errmsg: "senha repetida" }) };
+    if (url.endsWith("/add")) return { ok: true, json: async () => ({ keyboardPwdId: ++id }) };
+    return { ok: true, json: async () => ({ errcode: 0 }) };
+  };
+  const cfg = { url: "https://euapi.ttlock.com", clientId: "id", segredo: "s", usuario: "u", senha: "x" };
+  const r = await ck.emitirSenha("P-EN01", { buscarFn: fakeFetch, cfg });
+  assert.equal(r.senha_status, "ativa");
+  const adds = chamadas.filter((c) => c.url.endsWith("/add")).map((c) => c.campos);
+  // 1ª tentativa: entrada ok, quarto falhou → apaga a da entrada e tenta com outra senha
+  assert.equal(chamadas.filter((c) => c.url.endsWith("/delete"))[0].campos.lockId, "900001");
+  const ultimas = adds.slice(-2);
+  assert.equal(ultimas[0].lockId, "900001");
+  const lockQuarto = ultimas[1].lockId;
+  assert.notEqual(lockQuarto, "900001");
+  assert.equal(ultimas[0].keyboardPwd, r.senha);
+  assert.equal(ultimas[1].keyboardPwd, r.senha);
+  assert.equal(r.senhas_extra.length, 1);
+  assert.equal(r.senhas_extra[0].lock_id, "900001");
+  assert.equal(ck.comSufixo(r.senha), `${r.senha}#`);
+
+  const antes = chamadas.length;
+  const rv = await ck.revogarSenha("P-EN01", { buscarFn: fakeFetch, cfg });
+  assert.equal(rv.senha_status, "revogada");
+  assert.deepEqual(chamadas.slice(antes).filter((c) => c.url.endsWith("/delete")).map((c) => c.campos.lockId).sort(), [lockQuarto, "900001"].sort());
+  await store.removerUnidade("Entrada");
+});
+
 test("lista as fechaduras da conta TTLock/TTHotel, página por página", async () => {
   limparCacheToken();
   const paginas = [];

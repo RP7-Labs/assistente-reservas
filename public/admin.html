@@ -208,7 +208,7 @@
       <button class="btn" id="csvGoogle">Baixar conversões para o Google Ads</button>
     </div>
     <div class="tabela"><table>
-      <thead><tr><th>Origem</th><th>Campanha</th><th>Conversas</th><th>Links</th><th>Reservas pagas</th><th>Conversão</th><th>Receita</th></tr></thead>
+      <thead><tr><th>Origem</th><th>Campanha</th><th>Visitantes do site</th><th>Conversas</th><th>Links</th><th>Reservas pagas</th><th>Conversão</th><th>Receita</th></tr></thead>
       <tbody id="tbCamp"></tbody>
     </table></div>
     <div id="cfgCamp" class="aviso" style="margin-top:12px"></div>
@@ -581,9 +581,9 @@ async function carregarCheckin() {
   $("#ckModo").textContent += ck.modo_fnrh === "simulado"
     ? " A ficha de hóspedes fica guardada aqui e ainda não vai para a FNRH Digital: falta configurar FNRH_USUARIO, FNRH_SENHA e FNRH_CPF_SOLICITANTE (chave gerada no sistema da FNRH)."
     : ` A ficha vai para a FNRH Digital (${ck.modo_fnrh}) assim que o hóspede conclui o check-in; a saída é registrada no horário de check-out.`;
-  const nomeQ = Object.fromEntries(ck.quartos.map((q) => [q.id, q.nome]));
+  const nomeQ = { ...Object.fromEntries(ck.quartos.map((q) => [q.id, q.nome])), _entrada: "Entrada do hotel" };
   const sel = $("#unidadeQuarto"), atual = sel.value;
-  sel.innerHTML = ck.quartos.map((q) => `<option value="${esc(q.id)}">${esc(q.nome)}</option>`).join(""); if (atual) sel.value = atual;
+  sel.innerHTML = ck.quartos.map((q) => `<option value="${esc(q.id)}">${esc(q.nome)}</option>`).join("") + `<option value="_entrada">Entrada do hotel (mesma senha do quarto)</option>`; if (atual) sel.value = atual;
   const hoje = hojeISO();
   const pend = ck.reservas.filter((r) => r.status_reserva === "confirmada" && r.status !== "concluido" && r.checkin <= hoje).length;
   const b = $("#badgeCheckin"); b.hidden = !pend; b.textContent = pend;
@@ -593,7 +593,7 @@ async function carregarCheckin() {
       : r.status === "concluido" ? `<span class="tag t-ok">Concluído</span><div class="mut">${quando(r.concluido_em)}${r.chegada_prevista ? ` · chega ${esc(r.chegada_prevista)}` : ""}</div>`
       : r.link ? `<span class="tag t-warn">Aguardando hóspede</span>` : `<span class="tag">Link não criado</span>`;
     const [st, cor] = SENHA[r.senha_status] ?? ["—", ""];
-    const senha = r.senha ? `<code style="font-size:16px;letter-spacing:.1em">${esc(r.senha)}</code> <span class="tag ${cor}">${st}</span>` : r.senha_status ? `<span class="tag ${cor}">${st}</span>` : `<span class="mut">—</span>`;
+    const senha = r.senha ? `<code style="font-size:16px;letter-spacing:.1em">${esc(r.senha)}#</code> <span class="tag ${cor}">${st}</span>${r.senha_entrada?.length ? `<div class="mut">também na ${esc(r.senha_entrada.join(", "))}</div>` : ""}` : r.senha_status ? `<span class="tag ${cor}">${st}</span>` : `<span class="mut">—</span>`;
     const acoes = ativa ? [
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="copiar">Copiar link do guia</button>`,
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="enviar">Enviar por e-mail</button>`,
@@ -686,17 +686,18 @@ document.addEventListener("click", async (e) => {
 let camp = null;
 async function carregarCampanhas() {
   camp = await api(`/campanhas?dias=${$("#diasCamp").value}`);
-  const NOME = { google: "Google", meta: "Meta", facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", direto: "Direto / orgânico", email: "E-mail" };
+  const NOME = { site: "Site (direto)", google: "Google", meta: "Meta", facebook: "Facebook", instagram: "Instagram", tiktok: "TikTok", direto: "Direto / orgânico", email: "E-mail" };
   $("#tbCamp").innerHTML = camp.linhas.length ? camp.linhas.map((l) => `<tr><td><strong>${esc(NOME[l.fonte] || l.fonte)}</strong></td><td>${esc(l.campanha || "—")}</td>
-      <td>${l.conversas}</td><td>${l.links}</td><td><strong>${l.reservas}</strong></td>
+      <td>${l.visitantes || "—"}</td><td>${l.conversas}</td><td>${l.links}</td><td><strong>${l.reservas}</strong></td>
       <td>${l.conversas ? Math.round((l.reservas / l.conversas) * 100) + "%" : "—"}</td><td><strong>${brl(l.receita)}</strong></td></tr>`).join("")
-    : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhuma conversa no período.</td></tr>`;
+    : `<tr><td colspan="8" class="mut" style="text-align:center">Nenhuma visita ou conversa no período.</td></tr>`;
   const c = camp.config;
   const item = (ok, txt) => `<div>${ok ? "✓" : "○"} ${txt}</div>`;
   $("#cfgCamp").innerHTML = item(c.meta_pixel, "Pixel da Meta no chat e no pagamento (META_DATASET_ID)")
     + item(c.meta_capi, "API de Conversões da Meta, enviada pelo servidor (META_CAPI_TOKEN)")
     + item(c.meta_whatsapp, "Conversões de anúncios de clique para o WhatsApp (META_WABA_ID)")
-    + item(c.google_tag, "Tag de conversão do Google Ads no pagamento (GOOGLE_ADS_ID e GOOGLE_ADS_ROTULO_COMPRA)");
+    + item(c.google_tag, "Tag de conversão do Google Ads no pagamento (GOOGLE_ADS_ID e GOOGLE_ADS_ROTULO_COMPRA)")
+    + item(c.gtm, "Google Tag Manager no site, chat e pagamento (GTM_ID)");
   $("#listaConv").innerHTML = camp.conversoes.length ? camp.conversoes.map((v) => `<div class="item"><span class="tag ${v.ok ? "t-ok" : "t-err"}">${v.ok ? "enviada" : "falhou"}</span>
       <strong>${esc(v.plataforma === "meta" ? "Meta" : v.plataforma)}</strong> · ${esc(v.evento)} <span class="mono">${esc(v.event_id)}</span>
       ${v.valor != null ? `· ${brl(v.valor)}` : ""}<span class="mut" style="margin-left:auto">${quando(v.criado_em)}</span>

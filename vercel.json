@@ -12,6 +12,10 @@
     {
       "source": "/webhook/(.*)",
       "destination": "/api"
+    },
+    {
+      "source": "/site",
+      "destination": "/api"
     }
   ],
   "functions": {

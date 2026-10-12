@@ -10,10 +10,10 @@ import {
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
   listarCanais, listarBloqueios, salvarCanal, removerCanal,
   listarUnidades, salvarUnidade, removerUnidade, listarCheckins, buscarReserva,
-  listarOrigens, listarConversoes, listarConversasResumo,
+  listarOrigens, listarConversoes, listarConversasResumo, listarVisitas,
 } from "./store.js";
 import { novoToken, urlValida } from "./ical.js";
-import { garantirCheckin, emitirSenha, revogarSenha, OPCOES_FICHA } from "./checkin.js";
+import { garantirCheckin, emitirSenha, revogarSenha, OPCOES_FICHA, ENTRADA } from "./checkin.js";
 import { linkGuia, textoLinkGuia } from "./guia.js";
 import { modoFechaduras, configTTLock, listarFechadurasTTLock } from "./fechaduras.js";
 import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
@@ -220,7 +220,8 @@ admin.post("/canais", rota(async (req, res) => {
   const nome = String(b.nome ?? "").trim().slice(0, 80);
   const url = String(b.url_importar ?? "").trim();
   if (!nome) return res.status(400).json({ erro: "Dê um nome ao canal, ex.: Airbnb · Suíte 1." });
-  if (!carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  if (b.quarto_id !== ENTRADA && !carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  if (b.quarto_id === ENTRADA && !String(b.lock_id ?? "").trim()) return res.status(400).json({ erro: "Informe a fechadura da entrada." });
   if (url && !urlValida(url)) return res.status(400).json({ erro: "O link do calendário precisa começar com https://." });
   const canal = await salvarCanal({ id: crypto.randomBytes(5).toString("hex"), nome, quarto_id: b.quarto_id, url_importar: url || null, token_exportar: novoToken() });
   const sync = await sincronizarCanal(canal);
@@ -341,7 +342,7 @@ admin.get("/checkins", rota(async (req, res) => {
         status: c?.status ?? null, link: c ? linkGuia(baseUrl(req), c.token) : null, unidade: c?.unidade ?? null,
         chegada_prevista: c?.chegada_prevista ?? null, hospedes: c?.hospedes ?? null, concluido_em: c?.concluido_em ?? null,
         fnrh_status: c?.fnrh_status ?? null, fnrh_erro: c?.fnrh_erro ?? null, fnrh_entrada_em: c?.fnrh_entrada_em ?? null, fnrh_saida_em: c?.fnrh_saida_em ?? null,
-        senha: c?.senha ?? null, senha_status: c?.senha_status ?? null, senha_erro: c?.senha_erro ?? null, senha_inicio: c?.senha_inicio ?? null, senha_fim: c?.senha_fim ?? null,
+        senha: c?.senha ?? null, senha_entrada: (c?.senhas_extra ?? []).map((x) => x.unidade ?? x.lock_id), senha_status: c?.senha_status ?? null, senha_erro: c?.senha_erro ?? null, senha_inicio: c?.senha_inicio ?? null, senha_fim: c?.senha_fim ?? null,
       };
     });
   res.json({ pendente, modo: modoFechaduras(), modo_fnrh: modoFNRH(), unidades, reservas: lista, nomes: NOMES, quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome })) });
@@ -403,7 +404,8 @@ admin.post("/unidades", rota(async (req, res) => {
   const b = req.body ?? {};
   const numero = String(b.numero ?? "").trim().slice(0, 20);
   if (!numero) return res.status(400).json({ erro: "Informe o número da unidade." });
-  if (!carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  if (b.quarto_id !== ENTRADA && !carregarHotel().quartos.some((q) => q.id === b.quarto_id)) return res.status(400).json({ erro: "Escolha o tipo de quarto." });
+  if (b.quarto_id === ENTRADA && !String(b.lock_id ?? "").trim()) return res.status(400).json({ erro: "Informe a fechadura da entrada." });
   const lock = String(b.lock_id ?? "").trim();
   if (lock && !/^\d{1,15}$/.test(lock)) return res.status(400).json({ erro: "O ID da fechadura é o número que aparece no app TTLock (só dígitos)." });
   res.json(await salvarUnidade({ numero, quarto_id: b.quarto_id, lock_id: lock || null, ativa: b.ativa !== false }));
@@ -418,17 +420,24 @@ admin.delete("/unidades/:numero", rota(async (req, res) => {
 
 async function dadosCampanhas(dias) {
   const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
-  const [conversas, origens, { leads, reservas }, pagamentos] = await Promise.all([
-    listarConversasResumo(), listarOrigens().catch(() => []), listarDados(), listarPagamentos(),
+  const [conversas, origens, { leads, reservas }, pagamentos, visitas] = await Promise.all([
+    listarConversasResumo(), listarOrigens().catch(() => []), listarDados(), listarPagamentos(), listarVisitas(desde).catch(() => []),
   ]);
   const origemDe = new Map(origens.map((o) => [o.conversa_id, o]));
   const pagDe = new Map(pagamentos.map((p) => [p.lead_id, p]));
   const linhas = new Map();
   const linha = (o) => {
     const chave = `${fonte(o)}|${o?.utm_campaign ?? ""}`;
-    if (!linhas.has(chave)) linhas.set(chave, { fonte: fonte(o), campanha: o?.utm_campaign ?? null, conversas: 0, links: 0, reservas: 0, receita: 0 });
+    if (!linhas.has(chave)) linhas.set(chave, { fonte: fonte(o), campanha: o?.utm_campaign ?? null, visitantes: 0, conversas: 0, links: 0, reservas: 0, receita: 0 });
     return linhas.get(chave);
   };
+  // Visitantes do site (cada navegador conta uma vez por origem)
+  const vistos = new Set();
+  for (const v of visitas) {
+    const o = v.utm_source || v.referrer ? v : null;
+    const chave = `${v.visitante}|${fonte(o)}|${o?.utm_campaign ?? ""}`;
+    if (!vistos.has(chave)) { vistos.add(chave); linha(o).visitantes++; }
+  }
   for (const c of conversas.filter((c) => (c.atualizado_em ?? "") >= desde)) linha(origemDe.get(c.id)).conversas++;
   const vendas = [];
   for (const l of leads.filter((l) => l.criado_em >= desde)) {
@@ -442,7 +451,7 @@ async function dadosCampanhas(dias) {
       vendas.push({ codigo: r.codigo_motor, valor: Number(r.valor ?? 0), quando: pagDe.get(l.id)?.pago_em ?? r.criado_em ?? l.criado_em, fonte: fonte(o), campanha: o?.utm_campaign ?? null, gclid: o?.gclid ?? null });
     }
   }
-  return { linhas: [...linhas.values()].sort((a, b) => b.receita - a.receita || b.conversas - a.conversas), vendas };
+  return { linhas: [...linhas.values()].sort((a, b) => b.receita - a.receita || b.conversas - a.conversas || b.visitantes - a.visitantes), vendas };
 }
 
 admin.get("/campanhas", rota(async (req, res) => {
@@ -452,7 +461,7 @@ admin.get("/campanhas", rota(async (req, res) => {
   res.json({
     dias, linhas, vendas: vendas.slice(0, 50),
     conversoes: await listarConversoes(50).catch(() => []),
-    config: { meta_capi: Boolean(configMeta()), meta_pixel: Boolean(pub.meta_pixel), meta_whatsapp: Boolean(configMeta()?.waba), google_tag: Boolean(pub.google_ads && pub.google_compra) },
+    config: { meta_capi: Boolean(configMeta()), meta_pixel: Boolean(pub.meta_pixel), meta_whatsapp: Boolean(configMeta()?.waba), google_tag: Boolean(pub.google_ads && pub.google_compra), gtm: Boolean(pub.gtm) },
     link_base: baseUrl(req),
   });
 }));

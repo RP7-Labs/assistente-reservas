@@ -2,7 +2,7 @@ import express from "express";
 import { responder, modoAssistente } from "./assistente.js";
 import { carregarHotel, montarLinkMotor, noHotel, prepararHotel, hotelDoDominio, hoteisAtivos } from "./catalogo.js";
 import { HOTEL_PADRAO, SLUG_RE } from "./tenant.js";
-import { buscarLead, registrarClique, resumo, verificarBanco, localizarHotel } from "./store.js";
+import { buscarLead, registrarClique, resumo, verificarBanco, localizarHotel, registrarVisita, salvarOrigem } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
 import { rotasLeadsMeta, modoLeadsMeta } from "./leadsMeta.js";
 import { admin } from "./admin.js";
@@ -13,7 +13,9 @@ import { calendarioExportado, sincronizarCanais } from "./canais.js";
 import { checkin } from "./checkin.js";
 import { modoFechaduras } from "./fechaduras.js";
 import { modoFNRH, tarefasFNRH } from "./fnrh.js";
-import { configPublica, normalizarOrigem, registrarOrigem } from "./rastreio.js";
+import { configPublica, normalizarOrigem, registrarOrigem, codigoWhatsapp, linkWhatsappSite } from "./rastreio.js";
+import { dadosSite } from "./site.js";
+import { paginaSite } from "./sitePagina.js";
 
 export const app = express();
 // Guarda o corpo bruto para conferir a assinatura dos webhooks da Meta
@@ -88,6 +90,38 @@ app.get("/api/health", async (_req, res) => {
 
 // IDs públicos do Pixel da Meta e da tag do Google Ads (sem tokens)
 app.get("/api/rastreio/config", (_req, res) => res.json(configPublica()));
+
+// Visita a uma página do site: guarda só a origem (sem IP nem dado pessoal), para o funil por origem
+const VISITANTE_RE = /^[a-z0-9-]{8,40}$/i;
+app.post("/api/rastreio/visita", async (req, res) => {
+  const { visitante, pagina, origem } = req.body ?? {};
+  if (!VISITANTE_RE.test(String(visitante ?? ""))) return res.status(400).json({ erro: "visitante inválido" });
+  const o = normalizarOrigem(origem ?? {});
+  await registrarVisita({
+    visitante, pagina: String(pagina ?? "").slice(0, 120) || null,
+    utm_source: o.utm_source, utm_medium: o.utm_medium, utm_campaign: o.utm_campaign, referrer: o.referrer,
+  }).catch((err) => console.error("visita:", err.message));
+  res.status(204).end();
+});
+
+// Botão de WhatsApp do site: guarda a origem com um código curto que vai no texto da mensagem.
+// Quando a pessoa manda a mensagem, o webhook liga o código ao número dela (src/whatsapp.js).
+app.post("/api/rastreio/whatsapp", async (req, res) => {
+  const codigo = codigoWhatsapp();
+  const o = normalizarOrigem(req.body?.origem ?? {}, req);
+  await salvarOrigem({ conversa_id: `ref:${codigo}`, canal: "site", ...o }).catch((err) => console.error("origem whatsapp:", err.message));
+  res.json({ codigo, link: linkWhatsappSite(carregarHotel(), codigo, req.body?.texto) });
+});
+
+// Site do hotel, montado no servidor (bom para o Google e para carregar rápido no celular)
+app.get(["/site", "/site/"], (req, res) => {
+  const base = (process.env.PUBLIC_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+  res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=86400");
+  res.type("html").send(paginaSite(carregarHotel(), { base }));
+});
+
+// Conteúdo público do site do hotel (/site)
+app.get("/api/site", (_req, res) => res.json(dadosSite(carregarHotel())));
 
 // Dados públicos do hotel para o chat (nome no topo)
 app.get("/api/hotel", (_req, res) => {

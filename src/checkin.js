@@ -47,13 +47,21 @@ export function escolherUnidade({ reserva, unidades, checkins, reservas }) {
   return unidades.find((u) => u.ativa !== false && u.quarto_id === reserva.quarto_id && !ocupadas.has(u.numero)) ?? null;
 }
 
-// Gera (ou troca) a senha da reserva. Com fechadura e TTLock configurada, grava na fechadura; senão, simula.
+// Fechaduras de uso comum (porta de entrada do hotel, portão): a mesma senha do quarto abre também essas
+export const ENTRADA = "_entrada";
+const fechadurasEntrada = (unidades) => unidades.filter((u) => u.quarto_id === ENTRADA && u.ativa !== false && u.lock_id);
+
+// O hóspede digita a senha e termina com # (confirmação do teclado TTLock)
+export const comSufixo = (senha, hotel = carregarHotel()) => (senha ? `${senha}${hotel.guia?.teclado_sufixo ?? "#"}` : senha);
+
+// Gera (ou troca) a senha da reserva. Com fechadura e TTLock configurada, grava a mesma senha
+// na fechadura do quarto e nas da entrada; senão, simula.
 export async function emitirSenha(codigo, { buscarFn = fetch, cfg = configTTLock() } = {}) {
   const hotel = carregarHotel();
   const reserva = await buscarReserva(codigo);
   if (!reserva || !ATIVAS.has(reserva.status)) throw new Error("Reserva não está confirmada.");
   let ck = await garantirCheckin(codigo);
-  if (ck.senha_id && ck.senha_status === "ativa") await revogarSenha(codigo, { buscarFn, cfg });
+  if (ck.senha_status === "ativa" && (ck.senha_id || ck.senhas_extra?.length)) await revogarSenha(codigo, { buscarFn, cfg });
   ck = await buscarCheckin({ codigo });
 
   const [unidades, checkins, { reservas }] = await Promise.all([listarUnidades(), listarCheckins(), listarDados()]);
@@ -62,30 +70,49 @@ export async function emitirSenha(codigo, { buscarFn = fetch, cfg = configTTLock
   if (!unidade) return salvarCheckin({ ...ck, senha_status: "sem_unidade", senha_erro: "Nenhuma unidade livre cadastrada para este tipo de quarto." });
 
   const { inicio, fim } = janelaSenha(hotel, reserva);
-  const senha = novaSenha();
-  const base = { ...ck, unidade: unidade.numero, senha, senha_inicio: inicio.toISOString(), senha_fim: fim.toISOString(), senha_erro: null };
-  if (!unidade.lock_id || !cfg) return salvarCheckin({ ...base, senha_id: null, senha_status: "simulada" });
-  try {
-    const { id } = await criarSenhaTTLock({ lockId: unidade.lock_id, senha, nome: `${codigo} ${reserva.hospede ?? ""}`.trim(), inicio, fim }, cfg, buscarFn);
-    return salvarCheckin({ ...base, senha_id: id, senha_status: "ativa" });
-  } catch (err) {
-    return salvarCheckin({ ...base, senha: null, senha_id: null, senha_status: "erro", senha_erro: err.message.slice(0, 300) });
+  const base = { ...ck, unidade: unidade.numero, senha_inicio: inicio.toISOString(), senha_fim: fim.toISOString(), senha_erro: null };
+  const entrada = fechadurasEntrada(unidades);
+  if (!cfg || (!unidade.lock_id && !entrada.length)) return salvarCheckin({ ...base, senha: novaSenha(), senha_id: null, senhas_extra: [], senha_status: "simulada" });
+
+  // Entrada primeiro: é onde a senha mais pode coincidir com a de outro hóspede. Se algo falhar,
+  // apaga o que já foi criado e tenta de novo com outra senha.
+  const nome = `${codigo} ${reserva.hospede ?? ""}`.trim();
+  let erro = null;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const senha = novaSenha();
+    const criadas = [];
+    try {
+      for (const f of entrada) criadas.push({ lock_id: f.lock_id, unidade: f.numero, senha_id: (await criarSenhaTTLock({ lockId: f.lock_id, senha, nome, inicio, fim }, cfg, buscarFn)).id });
+      const quarto = unidade.lock_id ? (await criarSenhaTTLock({ lockId: unidade.lock_id, senha, nome, inicio, fim }, cfg, buscarFn)).id : null;
+      return salvarCheckin({ ...base, senha, senha_id: quarto, senhas_extra: criadas, senha_status: "ativa",
+        senha_erro: unidade.lock_id ? null : `O quarto ${unidade.numero} não tem fechadura cadastrada; a senha vale só na entrada.` });
+    } catch (err) {
+      erro = err;
+      for (const c of criadas) await apagarSenhaTTLock({ lockId: c.lock_id, senhaId: c.senha_id }, cfg, buscarFn).catch(() => {});
+    }
   }
+  return salvarCheckin({ ...base, senha: null, senha_id: null, senhas_extra: [], senha_status: "erro", senha_erro: erro.message.slice(0, 300) });
 }
 
-// Apaga a senha da fechadura (reserva cancelada, troca de senha ou pedido do hotel)
+// Apaga a senha das fechaduras (reserva cancelada, troca de senha ou pedido do hotel)
 export async function revogarSenha(codigo, { buscarFn = fetch, cfg = configTTLock() } = {}) {
   const ck = await buscarCheckin({ codigo }).catch(() => null);
   if (!ck || !ck.senha_status || ck.senha_status === "revogada") return ck;
-  if (ck.senha_id) {
-    const unidade = (await listarUnidades()).find((u) => u.numero === ck.unidade);
-    try {
-      if (unidade?.lock_id && cfg) await apagarSenhaTTLock({ lockId: unidade.lock_id, senhaId: ck.senha_id }, cfg, buscarFn);
-    } catch (err) {
-      return salvarCheckin({ ...ck, senha_erro: `Não consegui apagar na fechadura: ${err.message}`.slice(0, 300) });
+  const unidade = ck.senha_id ? (await listarUnidades()).find((u) => u.numero === ck.unidade) : null;
+  const alvos = [...(unidade?.lock_id ? [{ lock_id: unidade.lock_id, senha_id: ck.senha_id }] : []), ...(ck.senhas_extra ?? [])];
+  const falhas = [];
+  if (cfg) {
+    for (const a of alvos) {
+      try { await apagarSenhaTTLock({ lockId: a.lock_id, senhaId: a.senha_id }, cfg, buscarFn); }
+      catch (err) { falhas.push({ ...a, erro: err.message }); }
     }
   }
-  return salvarCheckin({ ...ck, senha: null, senha_id: null, senha_status: "revogada", senha_erro: null });
+  if (falhas.length) {
+    const quarto = falhas.find((f) => f.senha_id === ck.senha_id && f.lock_id === unidade?.lock_id);
+    return salvarCheckin({ ...ck, senha_id: quarto ? ck.senha_id : null, senhas_extra: falhas.filter((f) => f !== quarto).map(({ erro, ...f }) => f),
+      senha_erro: `Não consegui apagar na fechadura: ${falhas[0].erro}`.slice(0, 300) });
+  }
+  return salvarCheckin({ ...ck, senha: null, senha_id: null, senhas_extra: [], senha_status: "revogada", senha_erro: null });
 }
 
 // ---- Ficha dos hóspedes ----
@@ -186,7 +213,7 @@ async function emailSenha(hotel, reserva, ck) {
   if (!titular?.email) return;
   const temSenha = ck.senha && ["ativa", "simulada"].includes(ck.senha_status);
   const corpo = temSenha
-    ? `Check-in concluído! Seu quarto é o ${ck.unidade}.\n\nSenha da porta: ${ck.senha}\nVale de ${new Date(ck.senha_inicio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })} até ${new Date(ck.senha_fim).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.\n\nDigite a senha no teclado da fechadura e confirme. Guarde este e-mail; não compartilhe a senha.`
+    ? `Check-in concluído! Seu quarto é o ${ck.unidade}.\n\nSenha da porta: ${comSufixo(ck.senha, hotel)}\nVale de ${new Date(ck.senha_inicio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })} até ${new Date(ck.senha_fim).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.\n\nDigite os números no teclado da fechadura e termine com ${hotel.guia?.teclado_sufixo ?? "#"}.${ck.senhas_extra?.length ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""} Guarde este e-mail; não compartilhe a senha.`
     : "Check-in concluído! Recebemos seus dados. A recepção vai entregar o acesso ao quarto na chegada.";
   await enviarEmail({
     para: titular.email, tipo: "checkin_concluido", leadId: reserva.lead_id ?? null,
@@ -246,7 +273,7 @@ checkin.get("/:token", rota(async (req, res) => {
     sugestao: concluido ? null : { nome: reserva.hospede, email: reserva.email, telefone: reserva.telefone },
     opcoes: OPCOES_FICHA,
     concluido,
-    acesso: concluido ? { unidade: ck.unidade, senha: ["ativa", "simulada"].includes(ck.senha_status) ? ck.senha : null, inicio: ck.senha_inicio, fim: ck.senha_fim, simulada: ck.senha_status === "simulada" } : null,
+    acesso: concluido ? { unidade: ck.unidade, senha: ["ativa", "simulada"].includes(ck.senha_status) ? ck.senha : null, sufixo: hotel.guia?.teclado_sufixo ?? "#", entrada: Boolean(ck.senhas_extra?.length), inicio: ck.senha_inicio, fim: ck.senha_fim, simulada: ck.senha_status === "simulada" } : null,
   });
 }));
 

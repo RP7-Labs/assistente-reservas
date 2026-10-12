@@ -49,6 +49,7 @@
   .chave { display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; align-items: end }
   .chave .rot { font-size: 12.5px; color: var(--muted); font-weight: 600 }
   .chave .quarto { font-size: 34px; font-weight: 800; color: var(--navy); line-height: 1 }
+  .senha .suf { color: var(--verde, #2bb94a); margin-left: .06em }
   .senha { font: 800 34px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer }
   .vale { font-size: 13px; color: var(--ink-2); margin: 12px 0 0 }
   .aviso { font-size: 12.5px; color: #8a5a00; background: #fff4dc; border-radius: 10px; padding: 8px 12px; margin-top: 10px }
@@ -194,9 +195,9 @@ function cartaoAcesso() {
   const a = g.acesso, r = g.reserva;
   if (!r.ativa || r.fase === "depois") return "";
   if (a.senha) return `<section class="card acesso"><h2>Seu acesso</h2>
-    <div class="chave"><span class="rot">Quarto</span><span class="rot">Senha da porta</span>
-      <span class="quarto">${esc(a.unidade ?? "–")}</span><button class="senha" data-copiar="${esc(a.senha)}" data-rotulo="Senha" aria-label="Copiar senha">${esc(a.senha)}</button></div>
-    <p class="vale">Vale de ${quando(a.inicio)} até ${quando(a.fim)}. Digite no teclado da fechadura e confirme.</p>
+    <div class="chave"><span class="rot">Quarto</span><span class="rot">${a.entrada ? "Senha (entrada e quarto)" : "Senha da porta"}</span>
+      <span class="quarto">${esc(a.unidade ?? "–")}</span><button class="senha" data-copiar="${esc(a.senha)}" data-rotulo="Senha" aria-label="Copiar senha">${esc(a.senha)}<span class="suf">${esc(a.sufixo ?? "")}</span></button></div>
+    <p class="vale">Vale de ${quando(a.inicio)} até ${quando(a.fim)}. Digite os números e termine com <b>${esc(a.sufixo || "a tecla de confirmar")}</b>.${a.entrada ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""}</p>
     ${a.simulada ? '<div class="aviso">Ambiente de testes: esta senha ainda não está na fechadura.</div>' : ""}</section>`;
   if (a.concluido) return `<section class="card acesso"><h2>Seu acesso</h2><p>Check-in feito! A recepção entrega o acesso ao quarto na sua chegada.</p></section>`;
   return `<section class="card acesso"><h2>Seu acesso</h2>
