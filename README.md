@@ -70,7 +70,7 @@ Pagamento aprovado vira reserva confirmada (código `P-XXXXXX`) e manda dois e-m
 **Lembrete por e-mail:** quem preenche os dados e não paga em 5 minutos recebe o link de pagamento por e-mail (uma vez).
 
 - Sem `RESEND_API_KEY` e `EMAIL_FROM`, os e-mails ficam só registrados no back-office (simulado).
-- Para agendar na Vercel: defina `CRON_SECRET`, rode `db/004_pagamentos.sql` e depois `db/005_cron_lembretes.sql` (pg_cron do Supabase chama `/api/tarefas/lembretes` a cada minuto). Localmente, o `npm start` já roda os lembretes sozinho.
+- Para agendar na Vercel: rode `db/004_pagamentos.sql` e `db/005_cron_lembretes.sql` (pg_cron do Supabase chama `/api/tarefas/lembretes` a cada minuto). Defina `CRON_SECRET` na Vercel e o mesmo valor no Vault do Supabase com `select vault.create_secret('VALOR', 'cron_secret');`. Localmente, o `npm start` já roda os lembretes sozinho.
 
 ## Dúvidas do hotel (RAG local, sem custo)
 
@@ -142,7 +142,7 @@ A reserva paga desse lead volta para a Meta como evento de CRM com o `lead_id` (
 
 O sistema atende vários hotéis no mesmo deploy, cada um com os próprios dados, usuários e configuração, e quatro países: Brasil, Argentina, Paraguai e Estados Unidos (`src/paises.js`: idioma, moeda, fuso, documento do hóspede e meio de pagamento padrão).
 
-- **Migração:** rode `db/011_multihotel.sql` no Supabase logo depois do deploy. Ela cria a tabela `hoteis` e a coluna `hotel_id` em todas as tabelas; os dados atuais ficam no hotel `principal`.
+- **Migração:** rode `db/011_multihotel.sql` e `db/012_permissoes.sql` no Supabase logo depois do deploy. Ela cria a tabela `hoteis` e a coluna `hotel_id` em todas as tabelas; os dados atuais ficam no hotel `principal`.
 - **Qual hotel:** domínio cadastrado no hotel, ou `?hotel=<id>` no link do chat, do pagamento e do back-office. Links com id próprio (pagamento, check-in, calendário iCal, `/r/:id`) acham o hotel sozinhos. WhatsApp e leads da Meta acham o hotel pelo `whatsapp_phone_number_id` e pelo `meta_page_id` em `config.integracoes`.
 - **Admins da plataforma** (`PLATAFORMA_EMAILS`, ou o `ADMIN_EMAIL`) veem a aba Hotéis, criam hotéis e trocam de hotel pelo seletor. O admin de um hotel só vê o próprio hotel.
 - **Chaves:** as variáveis de ambiente (Getnet, WhatsApp, Meta, TTLock, FNRH) valem só para o hotel `principal`. Outros hotéis ficam simulados até a fase de chaves por hotel. Getnet e FNRH só ligam para hotéis do Brasil.

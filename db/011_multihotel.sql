@@ -37,3 +37,6 @@ alter table reservas.checkins drop constraint if exists checkins_pkey, add prima
 alter table reservas.conversoes drop constraint if exists conversoes_plataforma_evento_event_id_key;
 alter table reservas.conversoes drop constraint if exists conversoes_unico;
 alter table reservas.conversoes add constraint conversoes_unico unique (hotel_id, plataforma, evento, event_id);
+
+grant all on reservas.hoteis to service_role;
+notify pgrst, 'reload schema';

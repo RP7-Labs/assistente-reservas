@@ -20,3 +20,5 @@ alter table reservas.leads_meta enable row level security;
 
 -- Id do lead na origem da conversa: a reserva paga volta para a Meta como conversão do lead
 alter table reservas.origens add column if not exists meta_lead_id text;
+grant all on reservas.leads_meta to service_role;
+notify pgrst, 'reload schema';
