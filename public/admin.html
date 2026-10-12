@@ -250,11 +250,17 @@
     <form id="formUnidade" class="card" style="padding:16px;display:grid;gap:12px;grid-template-columns:1fr 1.4fr 1.4fr auto;align-items:end;margin-bottom:12px">
       <label style="display:grid;gap:6px">Número<input name="numero" placeholder="101" required></label>
       <label style="display:grid;gap:6px">Tipo de quarto<select name="quarto_id" id="unidadeQuarto"></select></label>
-      <label style="display:grid;gap:6px">ID da fechadura na TTLock<input name="lock_id" inputmode="numeric" placeholder="opcional"></label>
+      <label style="display:grid;gap:6px">Fechadura (TTLock/TTHotel)<input name="lock_id" inputmode="numeric" placeholder="opcional" list="listaLocks"></label>
       <button class="btn prim">Salvar</button>
       <span class="erro" id="unidadeErro" style="grid-column:1/-1"></span>
     </form>
     <div class="lista" id="listaUnidades"></div>
+    <datalist id="listaLocks"></datalist>
+    <div id="blocoLocks" hidden>
+      <h2>Fechaduras da conta</h2>
+      <p class="aviso" id="locksAviso"></p>
+      <div class="lista" id="listaFechaduras"></div>
+    </div>
   </section>
 
   <section data-sec="canais" hidden>
@@ -571,7 +577,7 @@ async function carregarCheckin() {
   $("#ckPendente").hidden = !ck.pendente; $("#ckPendente").textContent = ck.pendente || "";
   $("#ckModo").textContent = ck.modo === "ttlock"
     ? "As senhas são gravadas nas fechaduras pela TTLock e valem só entre o horário de check-in e o de check-out. Reserva cancelada perde a senha na hora."
-    : "Modo de teste: as senhas são geradas aqui, mas não vão para nenhuma fechadura. Para ligar, cadastre o ID de cada fechadura abaixo e configure TTLOCK_CLIENT_ID, TTLOCK_CLIENT_SECRET, TTLOCK_USERNAME e TTLOCK_PASSWORD na Vercel.";
+    : "Modo de teste: as senhas são geradas aqui, mas não vão para nenhuma fechadura. Para ligar, configure na Vercel TTLOCK_CLIENT_ID e TTLOCK_CLIENT_SECRET (no TTHotel: Configurações > Integração) e TTLOCK_USERNAME e TTLOCK_PASSWORD (a conta onde estão as fechaduras). Depois as fechaduras aparecem aqui para ligar a cada unidade.";
   $("#ckModo").textContent += ck.modo_fnrh === "simulado"
     ? " A ficha de hóspedes fica guardada aqui e ainda não vai para a FNRH Digital: falta configurar FNRH_USUARIO, FNRH_SENHA e FNRH_CPF_SOLICITANTE (chave gerada no sistema da FNRH)."
     : ` A ficha vai para a FNRH Digital (${ck.modo_fnrh}) assim que o hóspede conclui o check-in; a saída é registrada no horário de check-out.`;
@@ -608,6 +614,23 @@ async function carregarCheckin() {
       ${u.lock_id ? `<span class="tag t-ok">Fechadura ${esc(u.lock_id)}</span>` : `<span class="tag">Sem fechadura</span>`}
       <button class="btn" data-unidade-remover="${esc(u.numero)}" style="margin-left:auto">Remover</button></div>`).join("")
     : `<div class="vazio">Cadastre as unidades (101, 102...) para o sistema escolher o quarto e gerar a senha no check-in.</div>`;
+  carregarFechaduras();
+}
+async function carregarFechaduras() {
+  const bloco = $("#blocoLocks");
+  if (ck.modo !== "ttlock") { bloco.hidden = true; return; }
+  const r = await api("/fechaduras").catch((err) => ({ fechaduras: [], erro: err.message }));
+  bloco.hidden = false;
+  const semGateway = r.fechaduras.filter((f) => !f.gateway).length;
+  $("#locksAviso").textContent = r.erro ? r.erro
+    : !r.fechaduras.length ? "A conta configurada não tem fechaduras. Confira se TTLOCK_USERNAME é a mesma conta onde as fechaduras estão no TTHotel."
+    : `Toque em "Usar" para ligar a fechadura à unidade preenchida acima.${semGateway ? ` ${semGateway} sem gateway: a senha não chega a elas pela internet.` : ""}`;
+  $("#listaLocks").innerHTML = r.fechaduras.map((f) => `<option value="${esc(f.lock_id)}">${esc(f.nome)}</option>`).join("");
+  $("#listaFechaduras").innerHTML = r.fechaduras.map((f) => `<div class="item"><strong>${esc(f.nome)}</strong>
+      <span class="mut mono">${esc(f.lock_id)}</span>
+      ${f.gateway ? `<span class="tag t-ok">Gateway</span>` : `<span class="tag t-warn">Sem gateway</span>`}
+      ${f.bateria != null ? `<span class="tag ${f.bateria < 20 ? "t-err" : ""}">Bateria ${esc(f.bateria)}%</span>` : ""}
+      ${f.unidade ? `<span class="tag t-info">Unidade ${esc(f.unidade)}</span>` : `<button class="btn" data-usar-lock="${esc(f.lock_id)}" style="margin-left:auto">Usar</button>`}</div>`).join("");
 }
 function verFicha(codigo) {
   const r = ck.reservas.find((x) => x.codigo === codigo);
@@ -629,6 +652,8 @@ $("#formUnidade").addEventListener("submit", async (e) => {
   catch (err) { $("#unidadeErro").textContent = err.message; }
 });
 document.addEventListener("click", async (e) => {
+  const l = e.target.closest("[data-usar-lock]");
+  if (l) { const f = $("#formUnidade"); f.lock_id.value = l.dataset.usarLock; f.numero.focus(); f.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
   const u = e.target.closest("[data-unidade-remover]");
   if (u && confirm(`Remover a unidade ${u.dataset.unidadeRemover}?`)) {
     try { await api(`/unidades/${encodeURIComponent(u.dataset.unidadeRemover)}`, { method: "DELETE" }); await carregarCheckin(); } catch (err) { alert(err.message); }

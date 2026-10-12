@@ -9,7 +9,7 @@ delete process.env.SUPABASE_URL;
 delete process.env.RESEND_API_KEY;
 for (const v of ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET", "TTLOCK_USERNAME", "TTLOCK_PASSWORD"]) delete process.env[v];
 const ck = await import("../src/checkin.js");
-const { novaSenha, limparCacheToken } = await import("../src/fechaduras.js");
+const { novaSenha, limparCacheToken, listarFechadurasTTLock } = await import("../src/fechaduras.js");
 const store = await import("../src/store.js");
 const { app } = await import("../src/app.js");
 
@@ -149,6 +149,27 @@ test("senha na TTLock: cria com a janela certa e apaga ao revogar", async () => 
   assert.equal(e.senha_status, "erro");
   assert.equal(e.senha, null);
   assert.match(e.senha_erro, /gateway offline/);
+});
+
+test("lista as fechaduras da conta TTLock/TTHotel, página por página", async () => {
+  limparCacheToken();
+  const paginas = [];
+  const fakeFetch = async (url, op) => {
+    const campos = Object.fromEntries(new URLSearchParams(op.body));
+    if (url.endsWith("/oauth2/token")) return { ok: true, json: async () => ({ access_token: "tk", expires_in: 7776000 }) };
+    paginas.push(campos.pageNo);
+    const list = campos.pageNo === "1"
+      ? [{ lockId: 101, lockAlias: "Suíte 101", electricQuantity: 80, hasGateway: 1 }]
+      : [{ lockId: 202, lockName: "S202_ab12", electricQuantity: 15, hasGateway: 0 }];
+    return { ok: true, json: async () => ({ list, pageNo: Number(campos.pageNo), pages: 2 }) };
+  };
+  const cfg = { url: "https://euapi.ttlock.com", clientId: "id", segredo: "s", usuario: "u", senha: "x" };
+  const f = await listarFechadurasTTLock(cfg, fakeFetch);
+  assert.deepEqual(paginas, ["1", "2"]);
+  assert.deepEqual(f, [
+    { lock_id: "101", nome: "Suíte 101", bateria: 80, gateway: true },
+    { lock_id: "202", nome: "S202_ab12", bateria: 15, gateway: false },
+  ]);
 });
 
 test("fluxo do hóspede: link, ficha, senha simulada e e-mail", async () => {

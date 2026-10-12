@@ -67,3 +67,21 @@ export async function apagarSenhaTTLock({ lockId, senhaId }, cfg = configTTLock(
     clientId: cfg.clientId, accessToken, lockId: String(lockId), keyboardPwdId: String(senhaId), deleteType: "2", date: String(Date.now()),
   }, buscarFn);
 }
+
+// Fechaduras da conta (TTLock ou TTHotel), para ligar cada unidade à sua fechadura sem digitar o ID
+export async function listarFechadurasTTLock(cfg = configTTLock(), buscarFn = fetch) {
+  const accessToken = await token(cfg, buscarFn);
+  const lista = [];
+  for (let pagina = 1; pagina <= 10; pagina++) {
+    const j = await chamar(cfg, "/v3/lock/list", { clientId: cfg.clientId, accessToken, pageNo: String(pagina), pageSize: "100", date: String(Date.now()) }, buscarFn);
+    lista.push(...(j.list ?? []));
+    if (pagina >= (j.pages ?? 1)) break;
+  }
+  return lista.map((l) => ({
+    lock_id: String(l.lockId),
+    nome: l.lockAlias || l.lockName || String(l.lockId),
+    bateria: l.electricQuantity ?? null,
+    // Sem gateway, a senha não chega à fechadura pela internet
+    gateway: l.hasGateway === 1 || l.hasGateway === true,
+  }));
+}

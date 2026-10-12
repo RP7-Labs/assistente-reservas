@@ -15,7 +15,7 @@ import {
 import { novoToken, urlValida } from "./ical.js";
 import { garantirCheckin, emitirSenha, revogarSenha, OPCOES_FICHA } from "./checkin.js";
 import { linkGuia, textoLinkGuia } from "./guia.js";
-import { modoFechaduras } from "./fechaduras.js";
+import { modoFechaduras, configTTLock, listarFechadurasTTLock } from "./fechaduras.js";
 import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
 import { fonte, csvGoogleAds, configMeta, configPublica } from "./rastreio.js";
 import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } from "./canais.js";
@@ -384,6 +384,19 @@ admin.post("/checkins/:codigo/fnrh/:evento", rota(async (req, res) => {
   const ck = evento === "registrar" ? await registrarFicha(codigo) : await eventoFNRH(codigo, evento);
   if (!ck) return res.status(404).json({ erro: "Check-in não encontrado" });
   res.json({ ok: !ck.fnrh_erro, erro: ck.fnrh_erro ?? null });
+}));
+
+// Fechaduras da conta TTLock/TTHotel configurada, com a unidade que usa cada uma
+admin.get("/fechaduras", rota(async (_req, res) => {
+  const cfg = configTTLock();
+  if (!cfg) return res.json({ modo: "simulado", fechaduras: [] });
+  try {
+    const [fechaduras, unidades] = await Promise.all([listarFechadurasTTLock(cfg), listarUnidades()]);
+    const porLock = new Map(unidades.filter((u) => u.lock_id).map((u) => [String(u.lock_id), u.numero]));
+    res.json({ modo: "ttlock", fechaduras: fechaduras.map((f) => ({ ...f, unidade: porLock.get(f.lock_id) ?? null })) });
+  } catch (err) {
+    res.json({ modo: "ttlock", fechaduras: [], erro: `Não consegui falar com a TTLock: ${err.message}` });
+  }
 }));
 
 admin.post("/unidades", rota(async (req, res) => {
