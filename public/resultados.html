@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Resultados · Marketing e reservas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilo.css">
+<style>
+  .topo { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border) }
+  .topo .linha1 { display: flex; align-items: center; gap: 12px; padding: 12px 20px; flex-wrap: wrap }
+  .topo h1 { font-size: 19px }
+  .filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto }
+  .filtros input, .filtros select { padding: 7px 10px; font-size: 14px }
+  nav.abas { display: flex; gap: 2px; padding: 0 14px; overflow-x: auto }
+  nav.abas button { border: 0; background: none; padding: 10px 12px; font: 600 14px var(--font); color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap }
+  nav.abas button.ativo { color: var(--brand); border-color: var(--brand) }
+  main { padding: 20px; max-width: 1280px; margin: 0 auto }
+  .demo { background: var(--warn-50); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: var(--radius); padding: 10px 14px; font-weight: 700; margin-bottom: 16px }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow) }
+  .kpi .rot { font-size: 12.5px; color: var(--muted); font-weight: 600 }
+  .kpi .val { font-size: 24px; font-weight: 800; margin: 2px 0; letter-spacing: -.01em }
+  .kpi .var { font-size: 12.5px; font-weight: 600 }
+  .sobe { color: var(--ok) } .desce { color: var(--err) } .neutro { color: var(--muted) }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 16px }
+  .card h2 { font-size: 16px; margin-bottom: 10px }
+  .grade2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start } @media (max-width: 960px) { .grade2 { grid-template-columns: 1fr } }
+  .tabela { overflow-x: auto }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; position: sticky; top: 0; background: var(--surface) }
+  th:first-child, td:first-child, td.txt, th.txt { text-align: left }
+  tr.total td { font-weight: 800; border-top: 2px solid var(--border-strong) }
+  .alerta { border-left: 4px solid var(--border-strong); padding: 12px 14px; background: var(--surface); border-radius: var(--radius-sm); border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 10px }
+  .alerta.alta { border-left-color: var(--err) } .alerta.média { border-left-color: var(--warn) } .alerta.baixa { border-left-color: var(--info) }
+  .alerta h3 { font-size: 15px; margin: 4px 0 6px }
+  .alerta p { margin: 4px 0; font-size: 14px; color: var(--ink-2) }
+  .alerta .rotulo { font-weight: 700; color: var(--ink) }
+  .vazio { color: var(--muted); padding: 24px; text-align: center }
+  .imp { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px }
+  .imp .card { margin: 0 } .imp ol { padding-left: 18px; margin: 8px 0; font-size: 13.5px; color: var(--ink-2) }
+  .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-items: end }
+  .form label { display: grid; gap: 5px }
+  .barras { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 160px; margin: 10px 0 4px }
+  .barras div { position: relative; background: var(--brand); border-radius: 6px 6px 0 0; min-height: 2px }
+  .barras div.alta { background: var(--accent) }
+  .barras .meta { position: absolute; left: -2px; right: -2px; border-top: 2px dashed var(--err) }
+  .meses { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; font-size: 11.5px; color: var(--muted); text-align: center }
+  @media (max-width: 700px) { .topo { position: static } .kpis { grid-template-columns: 1fr 1fr } .kpi .val { font-size: 19px } main { padding: 14px 16px } }
+  #carregando { padding: 40px; text-align: center; color: var(--muted) }
+  .mini { font-size: 12px; color: var(--muted) }
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="linha1">
+    <a href="/admin" class="btn">← Admin</a>
+    <h1>Resultados</h1>
+    <div class="filtros">
+      <select id="preset"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="mes">Este mês</option><option value="custom">Período…</option></select>
+      <input type="date" id="de" hidden><input type="date" id="ate" hidden>
+      <select id="canal"><option value="">Todos os canais</option></select>
+      <select id="categoria"><option value="">Todas as categorias</option></select>
+      <label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="demo"> Demonstração</label>
+      <button class="btn" id="csv">Exportar CSV</button>
+    </div>
+  </div>
+  <nav class="abas" id="abas">
+    <button data-aba="geral" class="ativo">Visão geral</button><button data-aba="campanhas">Campanhas</button><button data-aba="reservas">Reservas</button>
+    <button data-aba="alertas">Alertas e recomendações</button><button data-aba="temporada">Temporada e metas</button><button data-aba="importar">Importações</button>
+    <button data-aba="config">Custos e orçamento</button><button data-aba="auditoria">Auditoria</button>
+  </nav>
+</header>
+<main>
+  <div class="demo" id="avisoDemo" hidden>DEMONSTRAÇÃO: estes números são fictícios, gerados só para mostrar o painel. Nada aqui é dado real do hotel.</div>
+  <div id="carregando">Carregando…</div>
+  <div class="erro" id="erroGeral"></div>
+
+  <section data-sec="geral" hidden>
+    <div class="kpis" id="kpis"></div>
+    <div class="grade2">
+      <div class="card"><h2>Por canal</h2><div class="tabela"><table id="tbCanais"></table></div>
+        <p class="mini" id="notaPlataformas"></p></div>
+      <div>
+        <div class="card"><h2>Qualidade dos dados</h2><div id="qualidade"></div></div>
+        <div class="card"><h2>Principais alertas</h2><div id="topAlertas"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-sec="campanhas" hidden>
+    <div class="card"><h2>Campanhas pagas</h2>
+      <p class="mini">Reservas e receita são as confirmadas no sistema/PMS, cada reserva contada uma vez. "Conv. da plataforma" é o que o Google ou a Meta informam e não deve ser somado.</p>
+      <div class="tabela"><table id="tbCampanhas"></table></div></div>
+  </section>
+
+  <section data-sec="reservas" hidden>
+    <div class="card"><h2>Reservas do período</h2>
+      <p class="mini">Até 300 mais recentes. "Ambos" = encontrada no sistema e no PMS. Origem desconhecida nunca é atribuída a campanha.</p>
+      <div class="tabela"><table id="tbReservas"></table></div></div>
+  </section>
+
+  <section data-sec="alertas" hidden>
+    <div class="card"><h2>Alertas</h2><div id="listaAlertas"></div></div>
+    <div class="card"><h2>Recomendações</h2>
+      <p class="mini">Modo recomendação: o sistema não altera campanhas, lances nem orçamentos. Toda mudança é feita por uma pessoa na plataforma de anúncios. Estimativas não são resultado garantido.</p>
+      <div id="listaRecs"></div></div>
+  </section>
+
+  <section data-sec="temporada" hidden>
+    <div class="card"><h2>Receita por mês de hospedagem <span class="mini" id="anoTemp"></span></h2>
+      <div class="barras" id="barras"></div><div class="meses" id="meses"></div>
+      <p class="mini">Barras: receita bruta das reservas ativas pelo mês de entrada (laranja = alta temporada). Linha tracejada: meta mínima de receita. Ocupação estimada com o número de unidades configurado.</p>
+      <div class="tabela"><table id="tbMeses"></table></div></div>
+    <div class="card"><h2>Metas (planejamento da empresa, não dados apurados)</h2>
+      <form class="form" id="formMetas">
+        <label>Meses de alta temporada<input name="meses_alta" placeholder="12,1,2,3"></label>
+        <label>Baixa: custo operacional máximo (R$/mês)<input name="baixa_custo" type="number" min="0" step="100"></label>
+        <label>Baixa: receita mínima (R$/mês)<input name="baixa_min" type="number" min="0" step="100"></label>
+        <label>Baixa: receita máxima (R$/mês)<input name="baixa_max" type="number" min="0" step="100"></label>
+        <label>Alta: receita mínima (R$/mês)<input name="alta_min" type="number" min="0" step="100"></label>
+        <label>Alta: receita máxima (R$/mês)<input name="alta_max" type="number" min="0" step="100"></label>
+        <label>Verba de mídia (R$/mês)<input name="midia_mensal" type="number" min="0" step="50"></label>
+        <label>Unidades (para ocupação)<input name="unidades" type="number" min="1" step="1"></label>
+        <button class="btn prim">Salvar metas</button>
+      </form><span class="erro" id="erroMetas"></span></div>
+  </section>
+
+  <section data-sec="importar" hidden>
+    <div class="imp">
+      <div class="card"><h2>Google Ads</h2>
+        <ol><li>Google Ads → Campanhas → período desejado.</li><li>Segmentar → Tempo → <b>Dia</b>.</li><li>Colunas: Custo, Impr., Cliques, Conversões, Valor de conv. (e o ID da campanha, se puder).</li><li>Download → CSV.</li></ol>
+        <input type="file" accept=".csv,.tsv,.txt" data-tipo="google"></div>
+      <div class="card"><h2>Meta Ads</h2>
+        <ol><li>Gerenciador de Anúncios → Campanhas → período.</li><li>Detalhamento → Por tempo → <b>Dia</b>.</li><li>Colunas: Valor usado, Impressões, Alcance, Cliques no link, Resultados (e Identificação da campanha).</li><li>Relatórios → Exportar dados da tabela → CSV.</li></ol>
+        <input type="file" accept=".csv,.tsv,.txt" data-tipo="meta"></div>
+      <div class="card"><h2>PMS / motor de reservas</h2>
+        <ol><li>Relatório de reservas do período em CSV (no Excel: Salvar como CSV).</li><li>Precisa ter: código da reserva, data da reserva, entrada, saída, valor, canal e status.</li><li>Não inclua nome, CPF ou contato do hóspede.</li></ol>
+        <input type="file" accept=".csv,.tsv,.txt" data-tipo="pms"></div>
+    </div>
+    <div class="card" id="previa" hidden style="margin-top:16px"></div>
+    <div class="card" style="margin-top:16px"><h2>Histórico de importações</h2><div class="tabela"><table id="tbImp"></table></div>
+      <p class="mini">Importar o mesmo período de novo atualiza as linhas, não duplica. Para ligar campanha a reserva, use nos anúncios: Google <code>utm_source=google&amp;utm_medium=cpc&amp;utm_campaign={campaignid}</code>; Meta <code>utm_source=meta&amp;utm_medium=paid_social&amp;utm_campaign={{campaign.id}}</code>.</p></div>
+  </section>
+
+  <section data-sec="config" hidden>
+    <div class="card"><h2>Custos variáveis (para receita líquida e margem)</h2>
+      <form class="form" id="formFin">
+        <label>Comissão média das OTAs (%)<input name="comissao_ota_pct" type="number" step="0.1" min="0" max="50"></label>
+        <label>Taxa de pagamento nas diretas (%)<input name="taxa_pagamento_pct" type="number" step="0.1" min="0" max="20"></label>
+        <label>Impostos sobre a receita (%)<input name="impostos_pct" type="number" step="0.1" min="0" max="40"></label>
+        <label>Custo variável por noite (R$)<input name="custo_variavel_noite" type="number" step="1" min="0"></label>
+        <label>Retorno mínimo sobre a margem (%)<input name="retorno_minimo_pct" type="number" step="1" min="0" max="95"></label>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="pms_valor_ja_liquido_de_comissao"> O valor do PMS já vem sem a comissão da OTA</label>
+        <button class="btn prim">Salvar custos</button>
+      </form><span class="erro" id="erroFin"></span>
+      <p class="mini">Os valores iniciais são estimativas: confirme com a contabilidade. Teto de custo por reserva = margem de contribuição média das reservas diretas × (1 − retorno mínimo).</p></div>
+    <div class="card"><h2>Orçamento de ferramentas (limite <span id="limiteFerr"></span>/mês)</h2>
+      <div class="tabela"><table id="tbFerr"></table></div>
+      <p class="mini">Verba de mídia fica fora deste limite. Nenhum serviço pago é contratado pelo sistema.</p></div>
+  </section>
+
+  <section data-sec="auditoria" hidden>
+    <div class="card"><h2>Histórico de alterações</h2><div id="listaAud"></div></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = (v) => v == null ? "—" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const num = (v, d = 0) => v == null ? "—" : Number(v).toLocaleString("pt-BR", { maximumFractionDigits: d });
+const pct = (v) => v == null ? "—" : `${num(v, 1)}%`;
+const dataBR = (s) => s ? s.slice(0, 10).split("-").reverse().join("/") : "—";
+const quando = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+let token = "", hotel = "";
+try { token = localStorage.getItem("adminToken") || ""; hotel = localStorage.getItem("hotelAdmin") || ""; } catch {}
+if (!token) location.href = "/admin";
+const cab = () => ({ "Content-Type": "application/json", Authorization: "Bearer " + token, ...(hotel ? { "X-Hotel": hotel } : {}) });
+async function api(caminho, opcoes = {}) {
+  const r = await fetch("/api/admin/resultados" + caminho, { ...opcoes, headers: cab() });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { location.href = "/admin"; throw new Error("Sessão expirada"); }
+  if (!r.ok) throw new Error(j.erro || `Erro ${r.status}`);
+  return j;
+}
+
+const CANAL = { google_ads: "Google Ads", meta_ads: "Meta Ads", organico: "Orgânico e indicações", direto: "Direto (site, WhatsApp)", ota: "OTAs", desconhecido: "Origem desconhecida" };
+let dados = null;
+
+function periodo() {
+  const hoje = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const p = $("#preset").value;
+  if (p === "custom") return { de: $("#de").value, ate: $("#ate").value || hoje };
+  if (p === "mes") return { de: hoje.slice(0, 8) + "01", ate: hoje };
+  return { de: new Date(Date.parse(hoje) - (Number(p) - 1) * 86400000).toISOString().slice(0, 10), ate: hoje };
+}
+function consulta() {
+  const { de, ate } = periodo();
+  const q = new URLSearchParams({ de, ate });
+  if ($("#canal").value) q.set("canal", $("#canal").value);
+  if ($("#categoria").value) q.set("categoria", $("#categoria").value);
+  if ($("#demo").checked) q.set("demo", "1");
+  return q.toString();
+}
+
+async function carregar() {
+  $("#erroGeral").textContent = ""; $("#carregando").hidden = false;
+  try {
+    dados = await api("/?" + consulta());
+    render();
+  } catch (err) { $("#erroGeral").textContent = err.message; }
+  $("#carregando").hidden = true;
+}
+
+function variacao(chave, melhorSobe = true) {
+  const v = dados.variacoes[chave];
+  if (!v || v.pct == null) return `<span class="var neutro">sem comparação</span>`;
+  const bom = (v.diferenca >= 0) === melhorSobe;
+  return `<span class="var ${v.diferenca === 0 ? "neutro" : bom ? "sobe" : "desce"}">${v.diferenca >= 0 ? "▲" : "▼"} ${num(Math.abs(v.pct), 1)}% vs período anterior</span>`;
+}
+
+function render() {
+  const { resumo: r, qualidade: q } = dados;
+  $("#avisoDemo").hidden = !dados.demo;
+  document.querySelectorAll("main > section").forEach((s) => s.hidden = s.dataset.sec !== abaAtual);
+  const sel = $("#categoria"), atual = sel.value;
+  sel.innerHTML = `<option value="">Todas as categorias</option>` + dados.categorias.map((c) => `<option>${esc(c)}</option>`).join(""); sel.value = atual;
+  const k = r.kpis;
+  const cards = [
+    ["Investimento em mídia", brl(k.investimento), variacao("investimento", false)],
+    ["Reservas confirmadas", num(k.reservas), variacao("reservas")],
+    ["Receita bruta", brl(k.receita_bruta), variacao("receita_bruta")],
+    ["Receita líquida (estimada)", brl(k.receita_liquida), variacao("receita_liquida")],
+    ["ROAS das campanhas", k.roas == null ? "—" : `${num(k.roas, 2)}×`, variacao("roas")],
+    ["Custo por reserva (campanhas)", brl(k.custo_por_reserva), `<span class="var neutro">teto ${brl(k.custo_maximo_reserva)}</span>`],
+    ["Reservas das campanhas", num(k.reservas_campanhas), `<span class="var neutro">Google diz ${num(k.conv_google)} · Meta diz ${num(k.conv_meta)} conv.</span>`],
+    ["Receita média por reserva", brl(k.receita_media), variacao("receita_media")],
+    ["Noites vendidas", num(k.noites), variacao("noites")],
+    ["Participação direta", pct(k.participacao_direta), variacao("participacao_direta")],
+    ["Cancelamentos e no-shows", num(k.canceladas), variacao("canceladas", false)],
+    ["Conversas → reserva", pct(k.conversao_conversas), `<span class="var neutro">${num(k.conversas)} conversas</span>`],
+  ];
+  $("#kpis").innerHTML = cards.map(([rot, val, v]) => `<div class="kpi"><div class="rot">${rot}</div><div class="val">${val}</div>${v}</div>`).join("");
+
+  const colsCanal = `<tr><th class="txt">Canal</th><th>Investimento</th><th>Visitantes</th><th>Conversas</th><th>Reservas</th><th>Canceladas</th><th>Receita bruta</th><th>ROAS</th><th>Custo/reserva</th><th>Margem após mídia</th></tr>`;
+  const linhaCanal = (c) => `<tr><td><a href="#" data-filtrar="${c.canal}">${esc(c.nome)}</a></td><td>${brl(c.investimento)}</td><td>${num(c.visitantes)}</td><td>${num(c.conversas)}</td><td>${num(c.reservas)}</td><td>${num(c.canceladas)}</td><td>${brl(c.receita_bruta)}</td><td>${c.roas == null ? "—" : num(c.roas, 2) + "×"}</td><td>${brl(c.custo_por_reserva)}</td><td>${brl(c.margem)}</td></tr>`;
+  $("#tbCanais").innerHTML = colsCanal + r.canais.filter((c) => c.investimento || c.reservas || c.conversas || c.visitantes || c.canceladas).map(linhaCanal).join("")
+    + `<tr class="total"><td>Total</td><td>${brl(k.investimento)}</td><td></td><td>${num(k.conversas)}</td><td>${num(k.reservas)}</td><td>${num(k.canceladas)}</td><td>${brl(k.receita_bruta)}</td><td></td><td></td><td></td></tr>`;
+  $("#notaPlataformas").textContent = "Margem após mídia = receita líquida − custo variável por noite − investimento. Cada reserva aparece em um único canal.";
+
+  const c = q.conciliacao;
+  $("#qualidade").innerHTML = `<p style="margin:0 0 8px"><b>${pct(q.cobertura_pct)}</b> das reservas com origem conhecida (${q.origem_desconhecida} sem origem).</p>
+    <p class="mini" style="margin:0 0 10px">Conciliação com o PMS: ${c.por_codigo} pelo código, ${c.por_datas_valor} por datas e valor, ${c.so_pms} só no PMS, ${c.so_sistema} só no sistema.</p>
+    ${q.fontes.map((f) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border)"><span>${esc(f.nome)}</span>
+      <span class="tag ${!f.ultima_importacao ? "t-err" : f.dias_atraso > 7 ? "t-warn" : "t-ok"}">${f.ultima_importacao ? `importado ${quando(f.ultima_importacao)}${f.dados_ate ? ` · dados até ${dataBR(f.dados_ate)}` : ""}` : "sem dados"}</span></div>`).join("")}`;
+  $("#topAlertas").innerHTML = dados.alertas.length ? dados.alertas.slice(0, 3).map((a) => `<div class="alerta ${a.prioridade}"><span class="tag">${a.prioridade} · confiança ${a.confianca}</span><h3>${esc(a.titulo)}</h3><p>${esc(a.acao)}</p></div>`).join("") + `<a href="#" data-ir="alertas">Ver todos</a>` : `<div class="vazio">Nenhum alerta no período.</div>`;
+
+  $("#tbCampanhas").innerHTML = `<tr><th class="txt">Plataforma</th><th class="txt">Campanha</th><th>Investimento</th><th>Impr.</th><th>Cliques</th><th>CTR</th><th>CPC</th><th>Conv. da plataforma</th><th>Conversas</th><th>Reservas</th><th>Receita</th><th>ROAS</th><th>Custo/reserva</th><th>Margem após mídia</th></tr>`
+    + (r.campanhas.length ? r.campanhas.map((x) => `<tr><td>${esc(CANAL[x.canal])}</td><td class="txt">${esc(x.campanha)}</td><td>${brl(x.investimento)}</td><td>${num(x.impressoes)}</td><td>${num(x.cliques)}</td><td>${pct(x.ctr)}</td><td>${brl(x.cpc)}</td><td>${num(x.conv_plataforma, 1)}</td><td>${num(x.conversas)}</td><td><b>${num(x.reservas)}</b></td><td>${brl(x.receita_bruta)}</td><td>${x.roas == null ? "—" : num(x.roas, 2) + "×"}</td><td>${brl(x.custo_por_reserva)}</td><td>${brl(x.margem)}</td></tr>`).join("")
+      : `<tr><td colspan="14" class="vazio">Sem campanhas no período. Importe os relatórios do Google Ads e da Meta na aba Importações.</td></tr>`);
+
+  const ST = { confirmada: "Confirmada", concluida: "Concluída", cancelada: "Cancelada", no_show: "No-show", pendente: "Pendente" };
+  $("#tbReservas").innerHTML = `<tr><th class="txt">Código</th><th class="txt">Feita em</th><th class="txt">Canal</th><th class="txt">Campanha</th><th class="txt">Entrada</th><th>Noites</th><th class="txt">Status</th><th>Valor</th><th>Contribuição</th><th class="txt">Fonte</th></tr>`
+    + (r.reservas.length ? r.reservas.map((x) => `<tr><td class="txt mono">${esc(x.codigo)}</td><td class="txt">${dataBR(x.data)}</td><td class="txt">${esc(CANAL[x.canal])}${x.canal_pms ? `<div class="mini">${esc(x.canal_pms)}</div>` : ""}</td><td class="txt">${esc(x.campanha || "—")}</td><td class="txt">${dataBR(x.checkin)}</td><td>${num(x.noites)}</td><td class="txt">${esc(ST[x.status] || x.status)}</td><td>${brl(x.valor)}</td><td>${brl(x.contribuicao)}</td><td class="txt">${x.fonte === "ambos" ? `ambos (${x.conciliada === "por_codigo" ? "código" : "datas e valor"})` : x.fonte}${x.nao_conciliada ? ` <span class="tag t-warn">não está no PMS</span>` : ""}</td></tr>`).join("")
+      : `<tr><td colspan="10" class="vazio">Nenhuma reserva no período.</td></tr>`);
+
+  const cartao = (a) => `<div class="alerta ${a.prioridade}"><span class="tag">${esc(a.prioridade)} · confiança ${esc(a.confianca)}</span>
+    <h3>${esc(a.titulo)}</h3>${a.justificativa ? `<p>${esc(a.justificativa)}</p>` : ""}
+    <p><span class="rotulo">Impacto:</span> ${esc(a.impacto)}</p><p><span class="rotulo">O que fazer:</span> ${esc(a.acao)}</p>
+    <p class="mini">Como avaliar depois: ${esc(a.criterio)}${a.dados || a.indicadores ? ` · Dados: ${esc(Object.entries(a.dados || a.indicadores).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(", "))}` : ""}</p></div>`;
+  $("#listaAlertas").innerHTML = dados.alertas.length ? dados.alertas.map(cartao).join("") : `<div class="vazio">Nenhum alerta no período.</div>`;
+  $("#listaRecs").innerHTML = dados.recomendacoes.length ? dados.recomendacoes.map(cartao).join("") : `<div class="vazio">Sem recomendações: faltam dados suficientes ou nada pede mudança.</div>`;
+
+  // Temporada
+  const saz = dados.sazonalidade, max = Math.max(1, ...saz.map((m) => Math.max(m.receita_bruta, m.meta_receita_min ?? 0)));
+  $("#anoTemp").textContent = r.ate.slice(0, 4);
+  $("#barras").innerHTML = saz.map((m) => `<div class="${m.temporada}" style="height:${(m.receita_bruta / max) * 100}%" title="${brl(m.receita_bruta)}">${m.meta_receita_min ? `<span class="meta" style="bottom:${(m.meta_receita_min / max) * 160}px"></span>` : ""}</div>`).join("");
+  const NOMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  $("#meses").innerHTML = NOMES.map((n) => `<span>${n}</span>`).join("");
+  $("#tbMeses").innerHTML = `<tr><th class="txt">Mês</th><th class="txt">Temporada</th><th>Reservas</th><th>Noites</th><th>Ocupação (est.)</th><th>Diária média</th><th>Receita bruta</th><th>Meta de receita</th><th>Investimento</th><th>Contribuição</th></tr>`
+    + saz.map((m) => `<tr><td class="txt">${NOMES[m.mes - 1]}</td><td class="txt">${m.temporada}</td><td>${num(m.reservas)}</td><td>${num(m.noites)}</td><td>${pct(m.ocupacao_pct)}</td><td>${brl(m.diaria_media)}</td><td>${brl(m.receita_bruta)}</td><td>${m.meta_receita_min ? `${brl(m.meta_receita_min)} a ${brl(m.meta_receita_max)}` : "—"}</td><td>${brl(m.investimento)}</td><td>${brl(m.contribuicao)}</td></tr>`).join("");
+  const mt = dados.config.metas, f = $("#formMetas");
+  f.meses_alta.value = mt.meses_alta.join(","); f.baixa_custo.value = mt.baixa.custo_operacional_max ?? ""; f.baixa_min.value = mt.baixa.receita_min ?? ""; f.baixa_max.value = mt.baixa.receita_max ?? "";
+  f.alta_min.value = mt.alta.receita_min ?? ""; f.alta_max.value = mt.alta.receita_max ?? ""; f.midia_mensal.value = mt.midia_mensal ?? ""; f.unidades.value = mt.unidades ?? "";
+
+  // Importações
+  $("#tbImp").innerHTML = `<tr><th class="txt">Quando</th><th class="txt">Tipo</th><th class="txt">Arquivo</th><th class="txt">Período</th><th>Linhas</th><th>Novas</th><th>Atualizadas</th><th>Ignoradas</th><th class="txt">Por</th></tr>`
+    + (dados.importacoes.length && !dados.demo ? dados.importacoes.map((i) => `<tr><td class="txt">${quando(i.criado_em)}</td><td class="txt">${esc(i.tipo)}</td><td class="txt">${esc(i.arquivo || "—")}</td><td class="txt">${dataBR(i.periodo_de)} a ${dataBR(i.periodo_ate)}</td><td>${num(i.linhas)}</td><td>${num(i.novas)}</td><td>${num(i.atualizadas)}</td><td>${num(i.ignoradas)}</td><td class="txt">${esc(i.usuario || "—")}</td></tr>`).join("")
+      : `<tr><td colspan="9" class="vazio">Nenhuma importação ainda.</td></tr>`);
+
+  // Custos e ferramentas
+  const fin = dados.config.financeiro, ff = $("#formFin");
+  for (const k of ["comissao_ota_pct", "taxa_pagamento_pct", "impostos_pct", "custo_variavel_noite", "retorno_minimo_pct"]) ff[k].value = fin[k];
+  ff.pms_valor_ja_liquido_de_comissao.checked = Boolean(fin.pms_valor_ja_liquido_de_comissao);
+  const fe = dados.config.ferramentas, tot = fe.itens.reduce((t, i) => t + Number(i.mensal || 0), 0);
+  $("#limiteFerr").textContent = brl(fe.limite_mensal);
+  $("#tbFerr").innerHTML = `<tr><th class="txt">Ferramenta</th><th class="txt">Categoria</th><th>R$/mês</th><th class="txt">Observação</th></tr>`
+    + fe.itens.map((i) => `<tr><td class="txt">${esc(i.nome)}</td><td class="txt">${esc(i.categoria)}</td><td>${brl(i.mensal)}</td><td class="txt" style="white-space:normal">${esc(i.obs || "")}</td></tr>`).join("")
+    + `<tr class="total"><td>Total</td><td></td><td>${brl(tot)}</td><td class="txt"><span class="tag ${tot > fe.limite_mensal ? "t-err" : "t-ok"}">${tot > fe.limite_mensal ? "acima do limite" : "dentro do limite"}</span></td></tr>`;
+}
+
+let abaAtual = "geral";
+$("#abas").onclick = (e) => {
+  const b = e.target.closest("[data-aba]"); if (!b) return;
+  abaAtual = b.dataset.aba;
+  document.querySelectorAll("#abas button").forEach((x) => x.classList.toggle("ativo", x === b));
+  if (dados) render();
+  if (abaAtual === "auditoria") carregarAuditoria();
+};
+document.addEventListener("click", (e) => {
+  const f = e.target.closest("[data-filtrar]");
+  if (f) { e.preventDefault(); $("#canal").value = f.dataset.filtrar; abaAtual = "reservas"; document.querySelectorAll("#abas button").forEach((x) => x.classList.toggle("ativo", x.dataset.aba === "reservas")); carregar(); return; }
+  const ir = e.target.closest("[data-ir]");
+  if (ir) { e.preventDefault(); document.querySelector(`#abas [data-aba="${ir.dataset.ir}"]`).click(); }
+});
+$("#canal").innerHTML = `<option value="">Todos os canais</option>` + Object.entries(CANAL).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+$("#preset").onchange = () => { const c = $("#preset").value === "custom"; $("#de").hidden = $("#ate").hidden = !c; if (!c) carregar(); };
+for (const id of ["#de", "#ate", "#canal", "#categoria", "#demo"]) $(id).onchange = carregar;
+$("#csv").onclick = async () => {
+  const r = await fetch("/api/admin/resultados/relatorio.csv?" + consulta(), { headers: cab() });
+  if (!r.ok) return alert("Não consegui gerar o relatório.");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob());
+  a.download = (r.headers.get("content-disposition") || "").match(/filename="(.+)"/)?.[1] || "resultados.csv"; a.click();
+};
+
+// Importação: lê o arquivo no navegador (UTF-8 ou UTF-16 do Google Ads), mostra a prévia e só grava ao confirmar
+async function lerArquivo(arq) {
+  const buf = new Uint8Array(await arq.arrayBuffer());
+  const utf16 = (buf[0] === 0xff && buf[1] === 0xfe) || (buf.length > 3 && buf[1] === 0 && buf[3] === 0);
+  let txt = new TextDecoder(utf16 ? "utf-16le" : "utf-8").decode(buf);
+  if (!utf16 && txt.includes("�")) txt = new TextDecoder("windows-1252").decode(buf);
+  return txt;
+}
+let pendente = null;
+document.querySelectorAll("input[type=file][data-tipo]").forEach((inp) => inp.onchange = async () => {
+  const arq = inp.files[0]; if (!arq) return;
+  if (arq.size > 3.5 * 1024 * 1024) { alert("Arquivo maior que 3,5 MB: exporte um período menor."); inp.value = ""; return; }
+  const conteudo = await lerArquivo(arq);
+  const box = $("#previa"); box.hidden = false; box.innerHTML = "Lendo…";
+  try {
+    const r = await api("/importar", { method: "POST", body: JSON.stringify({ tipo: inp.dataset.tipo, arquivo: arq.name, conteudo }) });
+    pendente = { tipo: inp.dataset.tipo, arquivo: arq.name, conteudo };
+    const p = r.previa;
+    box.innerHTML = `<h2>Prévia: ${esc(arq.name)}</h2>
+      <p>${num(p.linhas)} linhas válidas${p.periodo ? `, de ${dataBR(p.periodo.de)} a ${dataBR(p.periodo.ate)}` : ""}. ${p.total_erros ? `<b>${p.total_erros} linhas com erro</b> (não serão importadas).` : ""} ${p.ignoradas ? `${p.ignoradas} linhas de total ignoradas.` : ""}</p>
+      <p class="mini">Colunas reconhecidas: ${esc(p.colunas.join(", "))}</p>
+      ${p.avisos.map((a) => `<p class="erro" style="color:var(--warn)">${esc(a)}</p>`).join("")}
+      ${p.erros.length ? `<details><summary>Ver erros</summary>${p.erros.map((e) => `<div class="mini">Linha ${e.linha}: ${esc(e.erro)}</div>`).join("")}</details>` : ""}
+      <div class="tabela"><table><tr>${Object.keys(p.exemplo[0] || {}).map((k) => `<th class="txt">${esc(k)}</th>`).join("")}</tr>${p.exemplo.map((l) => `<tr>${Object.values(l).map((v) => `<td class="txt">${esc(v ?? "")}</td>`).join("")}</tr>`).join("")}</table></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn prim" id="confirmarImp" ${p.linhas ? "" : "disabled"}>Importar ${num(p.linhas)} linhas</button><button class="btn" id="cancelarImp">Cancelar</button></div>`;
+    $("#cancelarImp").onclick = () => { box.hidden = true; pendente = null; inp.value = ""; };
+    $("#confirmarImp").onclick = async () => {
+      try {
+        const f = await api("/importar", { method: "POST", body: JSON.stringify({ ...pendente, confirmar: true }) });
+        box.innerHTML = `<h2>Importado</h2><p>${num(f.importado.novas)} novas, ${num(f.importado.atualizadas)} atualizadas${f.importado.duplicadas_no_arquivo ? `, ${num(f.importado.duplicadas_no_arquivo)} repetidas no arquivo` : ""}.</p>`;
+        inp.value = ""; pendente = null; $("#demo").checked = false; carregar();
+      } catch (err) { alert(err.message); }
+    };
+  } catch (err) { box.innerHTML = `<p class="erro">${esc(err.message)}</p>`; inp.value = ""; }
+});
+
+$("#formFin").onsubmit = async (e) => {
+  e.preventDefault(); $("#erroFin").textContent = "";
+  const f = e.target, v = {};
+  for (const k of ["comissao_ota_pct", "taxa_pagamento_pct", "impostos_pct", "custo_variavel_noite", "retorno_minimo_pct"]) v[k] = Number(f[k].value);
+  v.pms_valor_ja_liquido_de_comissao = f.pms_valor_ja_liquido_de_comissao.checked;
+  try { await api("/config/financeiro", { method: "PUT", body: JSON.stringify(v) }); carregar(); } catch (err) { $("#erroFin").textContent = err.message; }
+};
+$("#formMetas").onsubmit = async (e) => {
+  e.preventDefault(); $("#erroMetas").textContent = "";
+  const f = e.target, n = (x) => x.value === "" ? null : Number(x.value);
+  const v = { meses_alta: f.meses_alta.value.split(/[,; ]+/).filter(Boolean).map(Number), baixa: { custo_operacional_max: n(f.baixa_custo), receita_min: n(f.baixa_min), receita_max: n(f.baixa_max) },
+    alta: { ...dados.config.metas.alta, receita_min: n(f.alta_min), receita_max: n(f.alta_max) }, midia_mensal: n(f.midia_mensal), unidades: n(f.unidades) };
+  try { await api("/config/metas", { method: "PUT", body: JSON.stringify(v) }); carregar(); } catch (err) { $("#erroMetas").textContent = err.message; }
+};
+async function carregarAuditoria() {
+  try {
+    const l = await api("/auditoria");
+    $("#listaAud").innerHTML = l.length ? l.map((a) => `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><b>${esc(a.acao)}</b> <span class="mini">${quando(a.criado_em)} · ${esc(a.usuario || "—")}</span>
+      <div class="mini mono" style="white-space:pre-wrap">${esc(JSON.stringify(a.detalhe))}</div></div>`).join("") : `<div class="vazio">Nada registrado ainda.</div>`;
+  } catch (err) { $("#listaAud").innerHTML = `<p class="erro">${esc(err.message)}</p>`; }
+}
+carregar();
+</script>
+</body>
+</html>

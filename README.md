@@ -169,3 +169,31 @@ Página pessoal do hóspede, pensada para o celular, com o mesmo token do pré-c
 
 - O hóspede digita os números e termina com `#` (`guia.teclado_sufixo` no `hotel.json`).
 - Cadastre a fechadura da entrada do hotel como unidade do tipo "Entrada do hotel": a mesma senha do quarto é criada nela também, com a mesma validade, e apagada junto.
+
+## Resultados de marketing (`/resultados`)
+
+Painel para saber quanto cada canal e campanha investiu, vendeu e deixou de margem. Fica no admin, em **Resultados**, e só abre com login. Ele não muda nada nas campanhas: só mostra números, alertas e recomendações, e quem decide e mexe no Google ou na Meta é uma pessoa.
+
+- **De onde vêm os dados.** Hoje por importação de CSV, na aba Importações, sempre com prévia antes de gravar:
+  - Google Ads: Campanhas, segmentado por Dia;
+  - Meta Ads: Detalhamento por Dia;
+  - relatório de reservas do PMS ou do motor.
+- **Reimportar não duplica.** Reimportar o mesmo período atualiza as linhas. Cada importação fica no histórico e na auditoria.
+- **Atribuição.** Usa a origem rastreada (UTM, gclid, fbclid, código do WhatsApp do site) da conversa que virou reserva.
+  - Reserva sem origem confiável fica como "Origem desconhecida".
+  - Reserva do PMS usa a coluna Canal (OTA ou direto).
+  - Reservas do sistema e do PMS são conciliadas pelo código e, se não houver, por datas e valor.
+- **Regras que o painel segue:**
+  - cada reserva conta uma vez;
+  - reserva cancelada ou no-show não é receita;
+  - as conversões que Google e Meta informam aparecem separadas e nunca somadas.
+- **Custos, metas e ferramentas.** Ficam nas abas do painel e toda mudança vai para a auditoria.
+  - Os custos (comissão OTA, taxa de pagamento, impostos, custo por noite) são estimativas: confirme com a contabilidade.
+  - O teto de custo por reserva sai da margem.
+  - O orçamento de ferramentas tem limite de R$ 500/mês.
+- **Demonstração.** A caixa "Demonstração" mostra dados fictícios, com aviso em destaque. Nada é gravado no banco.
+- **Banco.** Precisa da migração `db/014_resultados.sql`.
+
+UTMs para ligar campanha a reserva (use o id da campanha):
+- Google Ads, sufixo do URL final: `utm_source=google&utm_medium=cpc&utm_campaign={campaignid}` (deixe o tagueamento automático ligado para o gclid)
+- Meta Ads, parâmetros de URL: `utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.id}}`

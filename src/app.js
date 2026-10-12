@@ -19,7 +19,7 @@ import { paginaSite } from "./sitePagina.js";
 
 export const app = express();
 // Guarda o corpo bruto para conferir a assinatura dos webhooks da Meta
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.json({ limit: "4mb", verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // Hotel do pedido: cabeçalho X-Hotel ou ?hotel=<id>, domínio cadastrado no hotel, ou o hotel padrão.
 // Links com id próprio (pagamento, check-in, calendário) acham o hotel pelo id, mais abaixo.

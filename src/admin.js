@@ -24,6 +24,7 @@ import { emailPagamento, acaoGetnet } from "./pagamento.js";
 import { receberLead, contatarLead, modoLeadsMeta } from "./leadsMeta.js";
 import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel } from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
+import { resultados } from "./rotasResultados.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -513,3 +514,6 @@ admin.post("/leads-meta/teste", rota(async (req, res) => {
   });
   res.json({ ok: lead.status === "contatado", status: lead.status, erro: lead.erro ?? null, conversa_id: lead.conversa_id ?? null });
 }));
+
+// ---- Resultados de marketing: investimento, reservas, ROAS, alertas e importações ----
+admin.use("/resultados", resultados);

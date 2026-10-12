@@ -17,7 +17,7 @@ const sb = usarSupabase
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "local.json");
-const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta", "visitas"];
+const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta", "visitas", "midia_diaria", "reservas_externas", "importacoes", "configuracoes", "auditoria"];
 const vazio = () => ({ ...Object.fromEntries(TABELAS.map((t) => [t, []])), conversas: {}, atendimentos: {} });
 
 // Sem Supabase, cada hotel tem o próprio arquivo (o hotel padrão usa o arquivo original)
@@ -545,6 +545,109 @@ export async function registrarVisita(v) {
 }
 
 export async function listarVisitas(desde) {
-  if (sb) return verificar(await tab("visitas").select("visitante, utm_source, utm_campaign, referrer, criado_em").gte("criado_em", desde).limit(50000));
+  if (sb) return verificar(await tab("visitas").select("visitante, utm_source, utm_medium, utm_campaign, referrer, criado_em").gte("criado_em", desde).limit(50000));
   return lerArquivo().visitas.filter((v) => v.criado_em >= desde);
+}
+
+// ---- Resultados de marketing: gasto das campanhas, reservas do PMS, importações, configurações, auditoria ----
+
+const CHAVE_MIDIA = ["plataforma", "data", "campanha_id", "grupo_id", "anuncio_id"];
+const CHAVE_EXTERNA = ["fonte", "codigo"];
+const chaveDe = (campos) => (x) => campos.map((c) => String(x[c] ?? "")).join("|");
+
+// Grava linhas sem duplicar: a mesma chave atualiza a linha que já existe. Devolve quantas eram novas.
+async function upsertPorChave(tabela, campos, linhas, existentes) {
+  const chave = chaveDe(campos);
+  const ja = new Set(existentes.map(chave));
+  const agora = new Date().toISOString();
+  const unicas = [...new Map(linhas.map((l) => [chave(l), { ...l, atualizado_em: agora }])).values()];
+  const novas = unicas.filter((l) => !ja.has(chave(l))).length;
+  if (sb) {
+    for (let i = 0; i < unicas.length; i += 500) {
+      verificar(await tab(tabela).upsert(unicas.slice(i, i + 500), { onConflict: ["hotel_id", ...campos].join(",") }));
+    }
+  } else {
+    const db = lerArquivo();
+    const idx = new Map(db[tabela].map((x, i) => [chave(x), i]));
+    for (const l of unicas) {
+      if (idx.has(chave(l))) db[tabela][idx.get(chave(l))] = { ...db[tabela][idx.get(chave(l))], ...l };
+      else db[tabela].push(l);
+    }
+    gravarArquivo(db);
+  }
+  return { novas, atualizadas: unicas.length - novas, duplicadas_no_arquivo: linhas.length - unicas.length };
+}
+
+export async function salvarMidia(linhas) {
+  if (!linhas.length) return { novas: 0, atualizadas: 0, duplicadas_no_arquivo: 0 };
+  const datas = linhas.map((l) => l.data).sort();
+  const plataformas = [...new Set(linhas.map((l) => l.plataforma))];
+  const existentes = sb
+    ? verificar(await tab("midia_diaria").select(CHAVE_MIDIA.join(",")).in("plataforma", plataformas).gte("data", datas[0]).lte("data", datas.at(-1)).limit(100000))
+    : lerArquivo().midia_diaria;
+  return upsertPorChave("midia_diaria", CHAVE_MIDIA, linhas, existentes);
+}
+
+export async function listarMidia(de, ate) {
+  if (sb) return verificar(await tab("midia_diaria").select("*").gte("data", de).lte("data", ate).limit(100000));
+  return lerArquivo().midia_diaria.filter((m) => m.data >= de && m.data <= ate);
+}
+
+export async function salvarReservasExternas(linhas) {
+  if (!linhas.length) return { novas: 0, atualizadas: 0, duplicadas_no_arquivo: 0 };
+  const codigos = [...new Set(linhas.map((l) => l.codigo))];
+  let existentes = [];
+  if (sb) {
+    for (let i = 0; i < codigos.length; i += 300) existentes.push(...verificar(await tab("reservas_externas").select(CHAVE_EXTERNA.join(",")).in("codigo", codigos.slice(i, i + 300))));
+  } else existentes = lerArquivo().reservas_externas;
+  return upsertPorChave("reservas_externas", CHAVE_EXTERNA, linhas, existentes);
+}
+
+export async function listarReservasExternas() {
+  if (sb) return verificar(await tab("reservas_externas").select("*").limit(100000));
+  return lerArquivo().reservas_externas;
+}
+
+export async function registrarImportacao(imp) {
+  const linha = { criado_em: new Date().toISOString(), ...imp };
+  if (sb) return verificar(await tab("importacoes").insert(linha).select().single());
+  const db = lerArquivo();
+  linha.id = (db.importacoes.at(-1)?.id ?? 0) + 1;
+  db.importacoes.push(linha);
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function listarImportacoes(limite = 30) {
+  if (sb) return verificar(await tab("importacoes").select("*").order("criado_em", { ascending: false }).limit(limite));
+  return [...lerArquivo().importacoes].reverse().slice(0, limite);
+}
+
+export async function lerConfig(chave) {
+  if (sb) return verificar(await tab("configuracoes").select("valor").eq("chave", chave).maybeSingle())?.valor ?? null;
+  return lerArquivo().configuracoes.find((c) => c.chave === chave)?.valor ?? null;
+}
+
+export async function salvarConfig(chave, valor, usuario) {
+  const linha = { chave, valor, atualizado_por: usuario ?? null, atualizado_em: new Date().toISOString() };
+  if (sb) { verificar(await tab("configuracoes").upsert(linha, { onConflict: "hotel_id,chave" })); return linha; }
+  const db = lerArquivo();
+  const i = db.configuracoes.findIndex((c) => c.chave === chave);
+  if (i >= 0) db.configuracoes[i] = linha; else db.configuracoes.push(linha);
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function registrarAuditoria(usuario, acao, detalhe = null) {
+  const linha = { usuario: usuario ?? null, acao, detalhe, criado_em: new Date().toISOString() };
+  if (sb) { verificar(await tab("auditoria").insert(linha)); return linha; }
+  const db = lerArquivo();
+  db.auditoria.push(linha);
+  gravarArquivo(db);
+  return linha;
+}
+
+export async function listarAuditoria(limite = 100) {
+  if (sb) return verificar(await tab("auditoria").select("*").order("criado_em", { ascending: false }).limit(limite));
+  return [...lerArquivo().auditoria].reverse().slice(0, limite);
 }
