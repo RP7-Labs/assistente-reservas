@@ -45,7 +45,7 @@ Regras:
   com até 6 opções curtas (até 24 letras), escritas como o hóspede responderia. Para pedir uma data, inclua a opção "Escolher data". Exemplos: ao perguntar o quarto, liste os quartos; ao perguntar noites, "1 noite | 2 noites | 3 noites"; no começo, "Fazer uma reserva | Ver quartos e preços | Dúvidas sobre o hotel".
 
 Quartos (id: nome, capacidade, preço a partir de):
-${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. R$ ${q.preco_a_partir}/diária.${q.preco_mensal ? ` Estadia de ${q.minimo_noites_mensal ?? 28} noites ou mais: R$ ${q.preco_mensal}/mês.` : ""}`).join("\n")}
+${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. ${Number(q.preco_a_partir) > 0 ? `R$ ${q.preco_a_partir}/diária.` : "Preço não cadastrado: não informe valor, ofereça chamar a equipe."}${q.preco_mensal ? ` Estadia de ${q.minimo_noites_mensal ?? 28} noites ou mais: R$ ${q.preco_mensal}/mês.` : ""}`).join("\n")}
 
 Check-in a partir das ${hotel.checkin}; check-out até as ${hotel.checkout}. ${hotel.politicas}
 

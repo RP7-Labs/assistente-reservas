@@ -9,7 +9,6 @@ import { importarGoogleAds, importarMetaAds, importarPms } from "./importacao.js
 import {
   configCompleta, unificarReservas, resumir, periodoAnterior, variacoes, qualidade, alertas, recomendacoes, sazonalidade, csvRelatorio, CONFIG_PADRAO,
 } from "./resultados.js";
-import { dadosDemo } from "./resultadosDemo.js";
 import { hojeNoFuso } from "./paises.js";
 import { carregarHotel } from "./catalogo.js";
 
@@ -27,15 +26,14 @@ async function lerConfigs() {
   return configCompleta(salvas);
 }
 
-// Junta tudo o que o motor precisa: dados reais do banco ou, com demo=1, dados de demonstração
-async function carregar({ demo, hoje }) {
-  if (demo) return { ...dadosDemo(hoje), demo: true };
+// Junta tudo o que o motor precisa, só com dados reais do banco
+async function carregar({ hoje }) {
   const desde = new Date(Date.parse(hoje) - 800 * 86_400_000).toISOString().slice(0, 10);
   const [{ leads, reservas }, conversas, origens, visitas, midia, externas, importacoes] = await Promise.all([
     listarDados(), listarConversasResumo(5000), listarOrigens().catch(() => []), listarVisitas(desde).catch(() => []),
     listarMidia(desde, hoje).catch(() => []), listarReservasExternas().catch(() => []), listarImportacoes(50).catch(() => []),
   ]);
-  return { leads, reservas, conversas, origens, visitas, midia, externas, importacoes, demo: false };
+  return { leads, reservas, conversas, origens, visitas, midia, externas, importacoes };
 }
 
 async function calcular(req) {
@@ -44,7 +42,7 @@ async function calcular(req) {
   const de = DATA_RE.test(req.query.de ?? "") ? req.query.de : new Date(Date.parse(ate) - 29 * 86_400_000).toISOString().slice(0, 10);
   if (de > ate) throw Object.assign(new Error("A data inicial é depois da final."), { status: 400 });
   const config = await lerConfigs();
-  const dados = await carregar({ demo: req.query.demo === "1", hoje });
+  const dados = await carregar({ hoje });
   const { reservas, conciliacao } = unificarReservas(dados);
   const base = { reservas, midia: dados.midia, conversas: dados.conversas, origens: dados.origens, visitas: dados.visitas, config };
   // Filtros: canal e categoria de quarto
@@ -57,7 +55,7 @@ async function calcular(req) {
   const mesAtual = saz[Number(ate.slice(5, 7)) - 1];
   const als = alertas({ resumo, anterior, qualidade: q, config });
   const recs = recomendacoes({ resumo, alertas: als, config, ocupacao: { pct: mesAtual?.ocupacao_pct } });
-  return { demo: dados.demo, hoje, resumo, anterior: { de: ant.de, ate: ant.ate, kpis: anterior.kpis }, variacoes: variacoes(resumo.kpis, anterior.kpis), qualidade: q, alertas: als, recomendacoes: recs, sazonalidade: saz, config, importacoes: dados.importacoes.slice(0, 20), categorias: [...new Set(reservas.map((r) => r.categoria).filter(Boolean))] };
+  return { hoje, resumo, anterior: { de: ant.de, ate: ant.ate, kpis: anterior.kpis }, variacoes: variacoes(resumo.kpis, anterior.kpis), qualidade: q, alertas: als, recomendacoes: recs, sazonalidade: saz, config, importacoes: dados.importacoes.slice(0, 20), categorias: [...new Set(reservas.map((r) => r.categoria).filter(Boolean))] };
 }
 
 resultados.get("/", rota(async (req, res) => {
@@ -74,7 +72,7 @@ resultados.get("/", rota(async (req, res) => {
 resultados.get("/relatorio.csv", rota(async (req, res) => {
   const r = await calcular(req);
   res.set("Content-Type", "text/csv; charset=utf-8");
-  res.set("Content-Disposition", `attachment; filename="resultados-${r.resumo.de}-a-${r.resumo.ate}${r.demo ? "-DEMONSTRACAO" : ""}.csv"`);
+  res.set("Content-Disposition", `attachment; filename="resultados-${r.resumo.de}-a-${r.resumo.ate}.csv"`);
   res.send(csvRelatorio({ resumo: r.resumo, alertas: r.alertas, qualidade: r.qualidade }));
 }));
 

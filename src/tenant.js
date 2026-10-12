@@ -19,3 +19,8 @@ export const rodarNoHotel = (id, fn) => contexto.run({ id }, fn);
 const chaves = new Map();
 export const definirChavesDoHotel = (id, env) => chaves.set(id, env ?? {});
 export const envDoHotel = () => (hotelId() === HOTEL_PADRAO ? process.env : (chaves.get(hotelId()) ?? {}));
+
+// Simulação (checkout sem cobrança, senha que não vai para a fechadura, FNRH não enviada) só fora do ar:
+// em produção na Vercel fica desligada, a menos que SIMULACAO=1. Fora da Vercel (testes, máquina local) fica ligada,
+// a menos que SIMULACAO=0.
+export const simulacaoPermitida = () => (process.env.SIMULACAO ? process.env.SIMULACAO === "1" : process.env.VERCEL_ENV !== "production");

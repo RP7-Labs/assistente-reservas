@@ -67,7 +67,7 @@ const FERRAMENTAS = [
 async function executarFerramenta(nome, entrada, ctx) {
   if (nome === "gerar_link_reserva") {
     const v = validarPedido(ctx.hotel, entrada);
-    if (!v.ok) return { conteudo: JSON.stringify({ erro: v.erro }), erro: true };
+    if (!v.ok) return { conteudo: JSON.stringify({ erro: v.erro, ...(v.sem_preco ? { proximo_passo: "chamar_atendente" } : {}) }), erro: true };
     const lead = await criarLead({ canal: ctx.canal, conversa_id: ctx.conversaId, quarto_id: v.quarto.id, ...entrada, noites: v.noites });
     const linkMotor = montarLinkMotor(ctx.hotel, v.quarto, entrada, lead.id);
     // Link curto que passa pelo nosso servidor para contar o clique

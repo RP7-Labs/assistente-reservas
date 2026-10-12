@@ -187,15 +187,14 @@ test("configuração valida limites e registra quem mudou", async () => {
   assert.ok(aud.some((x) => x.acao === "alterou financeiro"));
 });
 
-test("painel: dados reais vazios, demonstração marcada e CSV", async () => {
+test("painel: só dados reais (sem demonstração) e CSV", async () => {
   const real = await fetch(base + "/?de=2026-10-01&ate=2026-10-31", { headers: cab }).then((r) => r.json());
-  assert.equal(real.demo, false);
+  assert.equal(real.demo, undefined);
   assert.equal(real.resumo.kpis.investimento, 31);
-  const demo = await fetch(base + "/?demo=1", { headers: cab }).then((r) => r.json());
-  assert.equal(demo.demo, true);
-  assert.ok(demo.resumo.kpis.reservas > 0);
-  const csv = await fetch(base + "/relatorio.csv?demo=1", { headers: cab });
-  assert.match(csv.headers.get("content-disposition"), /DEMONSTRACAO/);
+  const ignorado = await fetch(base + "/?de=2026-10-01&ate=2026-10-31&demo=1", { headers: cab }).then((r) => r.json());
+  assert.equal(ignorado.resumo.kpis.investimento, 31);
+  const csv = await fetch(base + "/relatorio.csv?de=2026-10-01&ate=2026-10-31", { headers: cab });
+  assert.match(csv.headers.get("content-disposition"), /resultados-2026-10-01-a-2026-10-31\.csv/);
   assert.match(await csv.text(), /;/);
   assert.equal((await fetch(base + "/?de=2026-10-31&ate=2026-10-01", { headers: cab })).status, 400);
 });

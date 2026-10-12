@@ -3,28 +3,29 @@
   "cidade": "Balneário Camboriú - SC",
   "checkin": "14:00",
   "checkout": "11:00",
-  "politicas": "Café da manhã incluso. Pets não aceitos. Cancelamento grátis até 48h antes.",
+  "politicas": "Check-in a partir das 14h e check-out até as 11h. Não aceitamos pets. Café da manhã em buffet. As condições de cancelamento dependem da tarifa escolhida.",
   "motor": {
-    "_comentario": "Modelo do link do motor de reservas (Gasystem). Substituir pelo formato real; {checkin}/{checkout} em AAAA-MM-DD.",
-    "link_modelo": "https://reservas.exemplo.com/hotel-piloto?quarto={codigo_motor}&checkin={checkin}&checkout={checkout}&adultos={adultos}&criancas={criancas}"
+    "_comentario": "Link do motor de reservas (HBook/HSystem) com {codigo_motor}, {checkin}, {checkout} (AAAA-MM-DD), {adultos}, {criancas}. Vazio = usa o checkout próprio. Preencher com o formato real do HBook do Rezende.",
+    "link_modelo": ""
   },
   "quartos": [
     {
       "id": "estudio",
-      "nome": "Estúdio",
+      "nome": "Smart Studio",
       "apelidos": [
         "estudio",
         "studio",
-        "kitnet",
-        "quarto com cozinha"
+        "smart studio",
+        "studio mensal",
+        "kitnet"
       ],
-      "descricao": "Estúdio com cozinha compacta, cama de casal e mesa de trabalho.",
+      "descricao": "Studio com cama de casal, ar-condicionado e Wi-Fi, para até 2 pessoas. Também alugado por mês.",
       "capacidade_adultos": 2,
-      "capacidade_total": 3,
-      "unidades": 8,
-      "preco_a_partir": 280,
-      "codigo_motor": "EST",
-      "preco_mensal": 3200,
+      "capacidade_total": 2,
+      "unidades": 9,
+      "preco_a_partir": null,
+      "codigo_motor": "",
+      "preco_mensal": null,
       "minimo_noites_mensal": 28
     },
     {
@@ -33,36 +34,22 @@
       "apelidos": [
         "suite",
         "suíte",
+        "quarto",
         "quarto de casal",
-        "casal"
+        "casal",
+        "triplo",
+        "quarto triplo"
       ],
-      "descricao": "Suíte com cama queen, frigobar e ar-condicionado.",
-      "capacidade_adultos": 2,
-      "capacidade_total": 2,
-      "unidades": 16,
-      "preco_a_partir": 220,
-      "codigo_motor": "SUI"
-    },
-    {
-      "id": "familia",
-      "nome": "Quarto Família",
-      "apelidos": [
-        "familia",
-        "família",
-        "quarto triplo",
-        "quadruplo",
-        "quádruplo"
-      ],
-      "descricao": "Cama de casal e duas de solteiro.",
-      "capacidade_adultos": 4,
-      "capacidade_total": 4,
-      "unidades": 6,
-      "preco_a_partir": 340,
-      "codigo_motor": "FAM"
+      "descricao": "Suíte com cama de casal e uma de solteiro, ar-condicionado, frigobar, cofre, TV e banheiro privativo, para até 3 pessoas.",
+      "capacidade_adultos": 3,
+      "capacidade_total": 3,
+      "unidades": 20,
+      "preco_a_partir": null,
+      "codigo_motor": ""
     }
   ],
-  "_comentario_unidades": "unidades = quantos quartos daquele tipo o hotel tem (usado na disponibilidade do back-office)",
-  "_comentario_mensal": "preco_mensal: preço do mês para estadias a partir de minimo_noites_mensal noites (Studio mensal). Valor de exemplo: confirmar com o Joel.",
+  "_comentario_unidades": "Fonte: Joel (29 UHs, 9 Smart Studios) e anúncio do Rezende Suítes no Booking.com (id 412625: quartos com casal + solteiro até 3 pessoas; studios com casal até 2). Preços ficam em branco até o hotel cadastrar no admin (aba Quartos > Catálogo e preços); sem preço o assistente não gera link e chama a equipe.",
+  "_comentario_mensal": "preco_mensal: preço do mês para estadias a partir de minimo_noites_mensal noites (Studio mensal). Em branco até o hotel informar.",
   "guia": {
     "marca": "Rezende Suítes",
     "fotos": {

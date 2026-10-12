@@ -106,10 +106,16 @@ export function validarPedido(hotel, { quarto_id, checkin, checkout, adultos, cr
     };
   }
   const noites = Math.round((Date.parse(checkout) - Date.parse(checkin)) / 86_400_000);
+  // Sem preço cadastrado não há link de pagamento: o valor nunca é inventado, a equipe passa
+  if (!temPreco(quarto, noites)) {
+    return { ok: false, sem_preco: true, quarto, noites, erro: `O valor do ${quarto.nome} para essas datas ainda não está no sistema. Vou chamar a equipe do hotel para passar o preço e concluir a reserva.` };
+  }
   return { ok: true, quarto, noites };
 }
 
 export function montarLinkMotor(hotel, quarto, { checkin, checkout, adultos, criancas = 0 }, leadId) {
+  // Sem o link do motor cadastrado, a reserva segue pelo checkout próprio (/r/:id)
+  if (!hotel.motor?.link_modelo || !quarto) return null;
   const base = hotel.motor.link_modelo
     .replace("{codigo_motor}", encodeURIComponent(quarto.codigo_motor))
     .replace("{checkin}", checkin)
@@ -128,6 +134,13 @@ export function montarLinkMotor(hotel, quarto, { checkin, checkout, adultos, cri
 // Total da estadia. Quarto com preco_mensal: a partir de minimo_noites_mensal (padrão 28) vale o preço do mês,
 // proporcional aos dias (estadia longa, como o Studio mensal); abaixo disso, diária × noites.
 export const MINIMO_MENSAL = 28;
+const positivo = (v) => Number(v) > 0;
+// O quarto tem preço cadastrado para essa estadia? (mensal a partir do mínimo de noites, senão diária)
+export function temPreco(quarto, noites = 1) {
+  if (!quarto) return false;
+  if (positivo(quarto.preco_mensal) && noites >= (quarto.minimo_noites_mensal ?? MINIMO_MENSAL)) return true;
+  return positivo(quarto.preco_a_partir);
+}
 export function precoTotal(quarto, noites) {
   if (!quarto) return 0;
   if (quarto.preco_mensal && noites >= (quarto.minimo_noites_mensal ?? MINIMO_MENSAL)) return Math.round((quarto.preco_mensal / 30) * noites);

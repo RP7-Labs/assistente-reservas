@@ -1,0 +1,429 @@
+{
+  "nome": "Hotel de Teste",
+  "cidade": "Balneário Camboriú - SC",
+  "checkin": "14:00",
+  "checkout": "11:00",
+  "politicas": "Café da manhã incluso. Pets não aceitos. Cancelamento grátis até 48h antes.",
+  "motor": {
+    "_comentario": "Modelo do link do motor de reservas (Gasystem). Substituir pelo formato real; {checkin}/{checkout} em AAAA-MM-DD.",
+    "link_modelo": "https://motor.teste.invalid/hotel?quarto={codigo_motor}&checkin={checkin}&checkout={checkout}&adultos={adultos}&criancas={criancas}"
+  },
+  "quartos": [
+    {
+      "id": "estudio",
+      "nome": "Estúdio",
+      "apelidos": [
+        "estudio",
+        "studio",
+        "kitnet",
+        "quarto com cozinha"
+      ],
+      "descricao": "Estúdio com cozinha compacta, cama de casal e mesa de trabalho.",
+      "capacidade_adultos": 2,
+      "capacidade_total": 3,
+      "unidades": 8,
+      "preco_a_partir": 280,
+      "codigo_motor": "EST",
+      "preco_mensal": 3200,
+      "minimo_noites_mensal": 28
+    },
+    {
+      "id": "suite",
+      "nome": "Suíte",
+      "apelidos": [
+        "suite",
+        "suíte",
+        "quarto de casal",
+        "casal"
+      ],
+      "descricao": "Suíte com cama queen, frigobar e ar-condicionado.",
+      "capacidade_adultos": 2,
+      "capacidade_total": 2,
+      "unidades": 16,
+      "preco_a_partir": 220,
+      "codigo_motor": "SUI"
+    },
+    {
+      "id": "familia",
+      "nome": "Quarto Família",
+      "apelidos": [
+        "familia",
+        "família",
+        "quarto triplo",
+        "quadruplo",
+        "quádruplo"
+      ],
+      "descricao": "Cama de casal e duas de solteiro.",
+      "capacidade_adultos": 4,
+      "capacidade_total": 4,
+      "unidades": 6,
+      "preco_a_partir": 340,
+      "codigo_motor": "FAM"
+    }
+  ],
+  "_comentario_unidades": "unidades = quantos quartos daquele tipo o hotel tem (usado na disponibilidade do back-office)",
+  "_comentario_mensal": "preco_mensal: preço do mês para estadias a partir de minimo_noites_mensal noites (Studio mensal). Valor de exemplo: confirmar com o Joel.",
+  "guia": {
+    "marca": "Rezende Suítes",
+    "fotos": {
+      "capa": "/guia/rezende/fachada.jpg",
+      "recepcao": "/guia/rezende/recepcao.jpg",
+      "quarto": "/guia/rezende/quarto.jpg",
+      "cafe": "/guia/rezende/cafe.jpg",
+      "rooftop": "/guia/rezende/rooftop.jpg",
+      "coworking": "/guia/rezende/coworking.jpg"
+    },
+    "endereco": "Rua 3100, nº 780, Centro, Balneário Camboriú - SC",
+    "mapa": "https://www.google.com/maps/search/?api=1&query=Rezende%20Su%C3%ADtes%2C%20Rua%203100%2C%20780%2C%20Centro%2C%20Balne%C3%A1rio%20Cambori%C3%BA%20-%20SC",
+    "contato": {
+      "whatsapp": "5547996093817",
+      "telefone": "554733619815",
+      "email": "reservas@rezendesuites.com.br",
+      "instagram": "rezendesuites"
+    },
+    "avaliacao_url": "https://www.google.com/maps/search/?api=1&query=Rezende%20Su%C3%ADtes%20Balne%C3%A1rio%20Cambori%C3%BA",
+    "acesso": "Acesso somente com a senha exclusiva e individual do seu quarto.",
+    "checkin_obs": "Quer chegar mais cedo? Fale com a gente: verificamos se dá para antecipar sua chegada.",
+    "checkout_obs": "Precisa sair mais tarde? Fale com a gente para ver a disponibilidade e os valores.",
+    "checkout_lista": [
+      [
+        "Reúna suas coisas",
+        "Confira se não esqueceu nada."
+      ],
+      [
+        "Aparelhos",
+        "Desligue as luzes e os aparelhos elétricos."
+      ],
+      [
+        "Ar-condicionado",
+        "Confira se está desligado."
+      ],
+      [
+        "Portas e janelas",
+        "Feche antes de sair."
+      ],
+      [
+        "Recepção",
+        "Avise o recepcionista do seu check-out."
+      ],
+      [
+        "Toalhas",
+        "Deixe as toalhas no chão do banheiro."
+      ],
+      [
+        "Organização",
+        "Deixe o espaço organizado."
+      ]
+    ],
+    "estacionamento": {
+      "baixa": 39,
+      "alta": 59,
+      "texto": "Estacionamento privativo, sujeito a disponibilidade. Também dá para estacionar de graça na rua (fique atento às placas)."
+    },
+    "wifi": {
+      "rede": "Rezende-Hóspedes",
+      "senha": null,
+      "dicas": [
+        "Confira se está conectado na rede certa.",
+        "Confira se digitou a senha corretamente."
+      ]
+    },
+    "estrutura": [
+      [
+        "recepcao",
+        "Recepção",
+        "Atendimento presencial das 7h às 23h. Depois disso, só pelo WhatsApp."
+      ],
+      [
+        "quarto",
+        "Suítes e studios",
+        "Todos com ar-condicionado, frigobar, cofre, TV e banheiro privativo."
+      ],
+      [
+        "coworking",
+        "Coworking",
+        "Espaço para trabalhar com conforto durante a estadia."
+      ],
+      [
+        "cafe",
+        "Café da manhã",
+        "Buffet e Café Express. Consulte disponibilidade e valores para o seu período."
+      ],
+      [
+        "rooftop",
+        "Rooftop",
+        "Espaço para relaxar com vista para a cidade e para o Cristo Luz."
+      ]
+    ],
+    "informacoes": [
+      [
+        "Café da manhã",
+        "Das 7h às 9h30, conforme a tarifa. Valores na recepção."
+      ],
+      [
+        "Limpeza do quarto",
+        "A cada 2 dias."
+      ],
+      [
+        "Proibido fumar",
+        "Nos quartos e em todas as áreas do hotel. Multa de R$ 300."
+      ]
+    ],
+    "utilidades": [
+      [
+        "Máquina de café",
+        "Em frente à recepção. Consulte valores."
+      ],
+      [
+        "Máquina de bebidas",
+        "Em frente à recepção, ao lado da máquina de café."
+      ],
+      [
+        "Ferro de passar",
+        "No primeiro andar, ao lado do coworking. Sem custo."
+      ],
+      [
+        "Micro-ondas",
+        "Ao lado da recepção."
+      ],
+      [
+        "Chaleira elétrica",
+        "Ao lado da recepção."
+      ]
+    ],
+    "regras": [
+      "Proibido fumar nos apartamentos.",
+      "Proibido receber visitas no apartamento.",
+      "Respeite a paz dos outros hóspedes e evite barulho.",
+      "Não aceitamos animais de estimação.",
+      "Não use aparelhos elétricos perigosos ou não autorizados.",
+      "Avise na hora qualquer problema ou dano durante a estadia."
+    ],
+    "transporte": {
+      "aeroportos": [
+        [
+          "Aeroporto de Navegantes",
+          "Uber, 99 e táxi no desembarque: cerca de R$ 100 a R$ 120 até o hotel. Locadoras de carro no aeroporto."
+        ],
+        [
+          "Aeroporto de Florianópolis",
+          "Uber, 99 e táxi no desembarque: cerca de R$ 180 a R$ 280 até o hotel. Locadoras de carro no aeroporto."
+        ]
+      ],
+      "local": "Uber, patinetes elétricos e ônibus pela cidade."
+    },
+    "passeios": [
+      [
+        "Roda Gigante",
+        "Vista panorâmica da orla e da cidade; o giro leva de 15 a 20 minutos.",
+        "Estrada da Rainha, 1009, Pioneiros, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Parque Unipraias",
+        "Bondinhos aéreos que ligam 3 estações, com até 6 pessoas por cabine.",
+        "Av. Atlântica, 6006, Centro, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Cristo Luz",
+        "Cartão-postal no alto do Morro da Cruz, com vista da cidade e show de luzes à noite.",
+        "R. Indonésia, 800, Nações, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Oceanic Aquarium",
+        "Animais marinhos de várias partes do mundo; bom para a família.",
+        "R. 4000, 133, Centro, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Space Adventure",
+        "Itens originais da NASA, simuladores e planetário 4K.",
+        "Av. das Flores, 455, Estados, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Aventura Jurássica",
+        "Dinossauros em tamanho real e cenários imersivos.",
+        "Rua Aqueduto, 370, Estados, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Beto Carrero World",
+        "O maior parque temático da região, em Penha.",
+        "Rua Inácio Francisco de Souza, 1597, Praia de Armação, Penha - SC",
+        false
+      ],
+      [
+        "Barco Pirata",
+        "Passeio de barco temático pelo litoral.",
+        "Av. Normando Tedesco, 6020, Barra Sul, Balneário Camboriú - SC",
+        false
+      ],
+      [
+        "Estrada da Rainha",
+        "Caminhada à beira-mar com uma das vistas mais bonitas da orla.",
+        "Estrada da Rainha, Praia dos Amores, Balneário Camboriú - SC",
+        true
+      ],
+      [
+        "Deck do Pontal Norte",
+        "Caminhada junto à natureza com vista da orla.",
+        "Pontal Norte, Balneário Camboriú - SC",
+        true
+      ],
+      [
+        "Letreiro Eu Amo BC",
+        "Parada clássica para a foto da viagem.",
+        "Av. Atlântica, Barra Sul, Balneário Camboriú - SC",
+        true
+      ],
+      [
+        "Passarela da Barra",
+        "Liga a Barra Sul ao bairro da Barra sobre o Rio Camboriú.",
+        "Av. Normando Tedesco, 1743, Centro, Balneário Camboriú - SC",
+        true
+      ],
+      [
+        "Praia, bike e beach tennis",
+        "Ciclovia na Av. Atlântica, patinetes e redes públicas de beach tennis na praia.",
+        "Av. Atlântica, Balneário Camboriú - SC",
+        true
+      ]
+    ],
+    "restaurantes": [
+      [
+        "Passeio San Miguel",
+        "Jantar",
+        "Av. Brasil, 3322, Centro, Balneário Camboriú - SC"
+      ],
+      [
+        "Roddertown",
+        "Jantar",
+        "Rua Dom Afonso, 430, Vila Real, Balneário Camboriú - SC"
+      ],
+      [
+        "Churrascaria Venturin",
+        "Almoço",
+        "3ª Avenida, 1114, Centro, Balneário Camboriú - SC"
+      ],
+      [
+        "Rossetto",
+        "Almoço",
+        "3ª Avenida, 1747, Centro, Balneário Camboriú - SC"
+      ]
+    ],
+    "teclado_sufixo": "#"
+  },
+  "site": {
+    "_comentario": "Textos do site /site. Fontes: guia de boas-vindas (PDF), metadados de rezendesuites.com.br e a página da Expedia (out/2026). Confirmar com o Joel.",
+    "titulo": "Smart Studios e Suítes no Centro de Balneário Camboriú",
+    "subtitulo": "A 2 minutos da Praia Central, com coworking, rooftop e check-in pelo celular.",
+    "destaques": [
+      [
+        "praia",
+        "Perto da Praia Central",
+        "Cerca de 10 minutos a pé da praia e do Passeio San Miguel."
+      ],
+      [
+        "chave",
+        "Check-in pelo celular",
+        "Faça o pré-check-in e receba a senha da porta. Sem fila na recepção."
+      ],
+      [
+        "trabalho",
+        "Coworking",
+        "Espaço para trabalhar com conforto e Wi-Fi em todo o hotel."
+      ],
+      [
+        "vista",
+        "Rooftop",
+        "Vista para a cidade e para o Cristo Luz."
+      ]
+    ],
+    "quartos": [
+      {
+        "id": "estudio",
+        "nome": "Smart Studio",
+        "descricao": "Studio com cozinha compacta, cama de casal e mesa de trabalho. Ideal para temporadas e estadias mensais.",
+        "foto": "quarto",
+        "itens": [
+          "Cozinha compacta",
+          "Mesa de trabalho",
+          "Ar-condicionado",
+          "Wi-Fi"
+        ]
+      },
+      {
+        "id": "suite",
+        "nome": "Suíte",
+        "descricao": "Suíte com ar-condicionado, frigobar, cofre, TV e banheiro privativo.",
+        "foto": "quarto",
+        "itens": [
+          "Ar-condicionado",
+          "Frigobar",
+          "Cofre",
+          "TV"
+        ]
+      }
+    ],
+    "mensal": {
+      "titulo": "Studio mensal",
+      "texto": "Mora ou trabalha em Balneário Camboriú por um tempo? Alugue o Smart Studio por mês, com Wi-Fi e a estrutura do hotel. Pergunte o valor para o seu período.",
+      "mensagem": "Quero saber do Studio mensal"
+    },
+    "distancias": [
+      [
+        "Praia Central",
+        "10 min a pé"
+      ],
+      [
+        "Passeio San Miguel",
+        "11 min a pé"
+      ],
+      [
+        "Igreja Santa Inês",
+        "18 min a pé"
+      ],
+      [
+        "Aeroporto de Navegantes",
+        "45 min de carro"
+      ]
+    ],
+    "avaliacoes": {
+      "nota": "8,2",
+      "fonte": "Expedia",
+      "total": 114,
+      "url": "https://www.expedia.com/Itajai-Hotels-Rezende-Suites-Hotel.h15361552.Hotel-Information",
+      "destaque": "Equipe nota 9,0"
+    },
+    "faq": [
+      [
+        "Qual o horário de check-in e check-out?",
+        "Check-in a partir das 14h e check-out até as 11h. Quer chegar mais cedo? Fale com a gente."
+      ],
+      [
+        "Como entro no hotel?",
+        "Depois do pré-check-in você recebe uma senha. Ela abre a porta de entrada e a do seu quarto: digite os números e termine com #."
+      ],
+      [
+        "Tem estacionamento?",
+        "Sim, privativo e sujeito a disponibilidade: R$ 39 por dia na baixa temporada e R$ 59 na alta."
+      ],
+      [
+        "Tem café da manhã?",
+        "Sim, das 7h às 9h30, conforme a tarifa."
+      ],
+      [
+        "Aceitam animais?",
+        "Não aceitamos animais de estimação."
+      ],
+      [
+        "Criança paga?",
+        "Uma criança de até 5 anos fica de graça usando as camas existentes."
+      ]
+    ]
+  },
+  "_comentario_teste": "Catálogo fictício usado só pelos testes automatizados (HOTEL_FILE no npm test). Não é dado do hotel."
+}

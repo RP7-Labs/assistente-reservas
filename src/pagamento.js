@@ -217,7 +217,7 @@ pagamento.get("/:lead", rota(async (req, res) => {
   // O link do pré-check-in aparece na tela quando a confirmação chega pela notificação da Getnet
   const ck = pag?.codigo_reserva && FINAIS.has(pag.status) ? await garantirCheckin(pag.codigo_reserva).catch(() => null) : null;
   if (p && ck) { p.link_checkin = linkCheckin(urlBase(req), ck.token); p.link_guia = linkGuia(urlBase(req), ck.token); }
-  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
+  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), ambiente: getnet.configGetnet()?.ambiente ?? null, whatsapp: hotel.guia?.contato?.whatsapp ?? hotel.whatsapp ?? null, expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
 }));
 
 // Passo 1: dados do hóspede. Começa a contar os minutos para o lembrete por e-mail.
@@ -237,6 +237,7 @@ pagamento.post("/:lead/dados", rota(async (req, res) => {
 }));
 
 async function prontoParaPagar(c, res) {
+  if (getnet.modoPagamento() === "indisponivel") { res.status(503).json({ erro: "O pagamento online ainda não está disponível. Fale com o hotel pelo WhatsApp para concluir a reserva." }); return false; }
   if (!c.pag?.email) { res.status(400).json({ erro: "Preencha seus dados primeiro." }); return false; }
   if (FINAIS.has(c.pag.status)) { res.status(409).json({ erro: "Esta reserva já foi paga." }); return false; }
   if (c.lead.checkin < new Date().toISOString().slice(0, 10)) { res.status(410).json({ erro: "As datas deste link já passaram. Peça um novo no chat." }); return false; }

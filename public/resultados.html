@@ -17,7 +17,6 @@
   nav.abas button { border: 0; background: none; padding: 10px 12px; font: 600 14px var(--font); color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap }
   nav.abas button.ativo { color: var(--brand); border-color: var(--brand) }
   main { padding: 20px; max-width: 1280px; margin: 0 auto }
-  .demo { background: var(--warn-50); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: var(--radius); padding: 10px 14px; font-weight: 700; margin-bottom: 16px }
   .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px }
   .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow) }
   .kpi .rot { font-size: 12.5px; color: var(--muted); font-weight: 600 }
@@ -63,7 +62,6 @@
       <input type="date" id="de" hidden><input type="date" id="ate" hidden>
       <select id="canal"><option value="">Todos os canais</option></select>
       <select id="categoria"><option value="">Todas as categorias</option></select>
-      <label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="demo"> Demonstração</label>
       <button class="btn" id="csv">Exportar CSV</button>
     </div>
   </div>
@@ -74,7 +72,6 @@
   </nav>
 </header>
 <main>
-  <div class="demo" id="avisoDemo" hidden>DEMONSTRAÇÃO: estes números são fictícios, gerados só para mostrar o painel. Nada aqui é dado real do hotel.</div>
   <div id="carregando">Carregando…</div>
   <div class="erro" id="erroGeral"></div>
 
@@ -202,7 +199,6 @@ function consulta() {
   const q = new URLSearchParams({ de, ate });
   if ($("#canal").value) q.set("canal", $("#canal").value);
   if ($("#categoria").value) q.set("categoria", $("#categoria").value);
-  if ($("#demo").checked) q.set("demo", "1");
   return q.toString();
 }
 
@@ -224,7 +220,6 @@ function variacao(chave, melhorSobe = true) {
 
 function render() {
   const { resumo: r, qualidade: q } = dados;
-  $("#avisoDemo").hidden = !dados.demo;
   document.querySelectorAll("main > section").forEach((s) => s.hidden = s.dataset.sec !== abaAtual);
   const sel = $("#categoria"), atual = sel.value;
   sel.innerHTML = `<option value="">Todas as categorias</option>` + dados.categorias.map((c) => `<option>${esc(c)}</option>`).join(""); sel.value = atual;
@@ -288,7 +283,7 @@ function render() {
 
   // Importações
   $("#tbImp").innerHTML = `<tr><th class="txt">Quando</th><th class="txt">Tipo</th><th class="txt">Arquivo</th><th class="txt">Período</th><th>Linhas</th><th>Novas</th><th>Atualizadas</th><th>Ignoradas</th><th class="txt">Por</th></tr>`
-    + (dados.importacoes.length && !dados.demo ? dados.importacoes.map((i) => `<tr><td class="txt">${quando(i.criado_em)}</td><td class="txt">${esc(i.tipo)}</td><td class="txt">${esc(i.arquivo || "—")}</td><td class="txt">${dataBR(i.periodo_de)} a ${dataBR(i.periodo_ate)}</td><td>${num(i.linhas)}</td><td>${num(i.novas)}</td><td>${num(i.atualizadas)}</td><td>${num(i.ignoradas)}</td><td class="txt">${esc(i.usuario || "—")}</td></tr>`).join("")
+    + (dados.importacoes.length ? dados.importacoes.map((i) => `<tr><td class="txt">${quando(i.criado_em)}</td><td class="txt">${esc(i.tipo)}</td><td class="txt">${esc(i.arquivo || "—")}</td><td class="txt">${dataBR(i.periodo_de)} a ${dataBR(i.periodo_ate)}</td><td>${num(i.linhas)}</td><td>${num(i.novas)}</td><td>${num(i.atualizadas)}</td><td>${num(i.ignoradas)}</td><td class="txt">${esc(i.usuario || "—")}</td></tr>`).join("")
       : `<tr><td colspan="9" class="vazio">Nenhuma importação ainda.</td></tr>`);
 
   // Custos e ferramentas
@@ -318,7 +313,7 @@ document.addEventListener("click", (e) => {
 });
 $("#canal").innerHTML = `<option value="">Todos os canais</option>` + Object.entries(CANAL).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("#preset").onchange = () => { const c = $("#preset").value === "custom"; $("#de").hidden = $("#ate").hidden = !c; if (!c) carregar(); };
-for (const id of ["#de", "#ate", "#canal", "#categoria", "#demo"]) $(id).onchange = carregar;
+for (const id of ["#de", "#ate", "#canal", "#categoria"]) $(id).onchange = carregar;
 $("#csv").onclick = async () => {
   const r = await fetch("/api/admin/resultados/relatorio.csv?" + consulta(), { headers: cab() });
   if (!r.ok) return alert("Não consegui gerar o relatório.");
@@ -356,7 +351,7 @@ document.querySelectorAll("input[type=file][data-tipo]").forEach((inp) => inp.on
       try {
         const f = await api("/importar", { method: "POST", body: JSON.stringify({ ...pendente, confirmar: true }) });
         box.innerHTML = `<h2>Importado</h2><p>${num(f.importado.novas)} novas, ${num(f.importado.atualizadas)} atualizadas${f.importado.duplicadas_no_arquivo ? `, ${num(f.importado.duplicadas_no_arquivo)} repetidas no arquivo` : ""}.</p>`;
-        inp.value = ""; pendente = null; $("#demo").checked = false; carregar();
+        inp.value = ""; pendente = null; carregar();
       } catch (err) { alert(err.message); }
     };
   } catch (err) { box.innerHTML = `<p class="erro">${esc(err.message)}</p>`; inp.value = ""; }

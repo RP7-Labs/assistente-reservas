@@ -2,7 +2,7 @@
 // nunca passar pelo nosso servidor. A captura e o cancelamento da pré-autorização são feitos pela API v2.
 // Sem GETNET_CLIENT_ID, GETNET_CLIENT_SECRET e GETNET_SELLER_ID, o checkout continua simulado.
 import crypto from "node:crypto";
-import { envDoHotel } from "./tenant.js";
+import { envDoHotel, simulacaoPermitida } from "./tenant.js";
 import { carregarHotel } from "./catalogo.js";
 
 const AMBIENTES = {
@@ -27,7 +27,8 @@ export function configGetnet(env = envDoHotel(), pais = carregarHotel().pais) {
     preAutorizacao: env.GETNET_PRE_AUTORIZACAO !== "0",
   };
 }
-export const modoPagamento = () => (configGetnet() ? "getnet" : "simulado");
+// Sem chaves: checkout simulado só onde a simulação é permitida; em produção, pagamento online indisponível
+export const modoPagamento = () => (configGetnet() ? "getnet" : simulacaoPermitida() ? "simulado" : "indisponivel");
 
 export const centavos = (v) => Math.round(Number(v) * 100);
 

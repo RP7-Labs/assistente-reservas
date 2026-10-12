@@ -1,7 +1,7 @@
 import express from "express";
 import { responder, modoAssistente } from "./assistente.js";
 import { carregarHotel, montarLinkMotor, noHotel, prepararHotel, hotelDoDominio, hoteisAtivos } from "./catalogo.js";
-import { HOTEL_PADRAO, SLUG_RE } from "./tenant.js";
+import { HOTEL_PADRAO, SLUG_RE, simulacaoPermitida } from "./tenant.js";
 import { buscarLead, registrarClique, resumo, verificarBanco, localizarHotel, registrarVisita, salvarOrigem } from "./store.js";
 import { rotasWhatsapp } from "./whatsapp.js";
 import { rotasLeadsMeta, modoLeadsMeta } from "./leadsMeta.js";
@@ -69,16 +69,16 @@ app.get("/api/health", async (_req, res) => {
     config("whatsapp", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID"),
     (() => {
       const g = configGetnet();
-      if (!g) return { nome: "pagamento", estado: "pendente", detalhe: "checkout simulado (falta GETNET_CLIENT_ID, GETNET_CLIENT_SECRET, GETNET_SELLER_ID)" };
+      if (!g) return { nome: "pagamento", estado: "pendente", detalhe: `${simulacaoPermitida() ? "checkout simulado" : "pagamento online desligado"} (falta GETNET_CLIENT_ID, GETNET_CLIENT_SECRET, GETNET_SELLER_ID)` };
       if (!g.notificacao) return { nome: "pagamento", estado: "erro", detalhe: "Getnet sem GETNET_SEGREDO_NOTIFICACAO: os pagamentos não são confirmados" };
       return { nome: "pagamento", estado: "ok", detalhe: `Getnet (${g.ambiente})` };
     })(),
     modoEmail() === "resend"
       ? { nome: "email", estado: "ok", detalhe: "envio pela Resend" }
-      : { nome: "email", estado: "pendente", detalhe: "simulado: e-mails ficam no back-office (falta RESEND_API_KEY, EMAIL_FROM)" },
+      : { nome: "email", estado: "pendente", detalhe: "não enviados: e-mails ficam só no back-office (falta RESEND_API_KEY, EMAIL_FROM)" },
     modoFechaduras() === "ttlock"
       ? { nome: "fechaduras", estado: "ok", detalhe: "senhas gravadas nas fechaduras pela TTLock" }
-      : { nome: "fechaduras", estado: "pendente", detalhe: "senhas simuladas (falta TTLOCK_CLIENT_ID, TTLOCK_CLIENT_SECRET, TTLOCK_USERNAME, TTLOCK_PASSWORD)" },
+      : { nome: "fechaduras", estado: "pendente", detalhe: `${simulacaoPermitida() ? "senhas simuladas" : "senha entregue pela recepção"} (falta TTLOCK_CLIENT_ID, TTLOCK_CLIENT_SECRET, TTLOCK_USERNAME, TTLOCK_PASSWORD)` },
     modoFNRH() === "simulado"
       ? { nome: "fnrh", estado: "pendente", detalhe: "fichas guardadas aqui, sem envio (falta FNRH_USUARIO, FNRH_SENHA, FNRH_CPF_SOLICITANTE)" }
       : { nome: "fnrh", estado: "ok", detalhe: `envio à FNRH Digital (${modoFNRH()})` },
@@ -160,10 +160,9 @@ async function redirecionarLead(req, res) {
     if (!lead) return res.status(404).send("Link não encontrado");
     await registrarClique(lead.id);
     const hotel = carregarHotel();
-    // Por padrão vai para o checkout próprio (simulado). CHECKOUT_MODO=motor manda para o motor de reservas.
-    if (process.env.CHECKOUT_MODO !== "motor") return res.redirect(302, `/pagamento?lead=${encodeURIComponent(lead.id)}`);
-    const quarto = hotel.quartos.find((q) => q.id === lead.quarto_id);
-    res.redirect(302, montarLinkMotor(hotel, quarto, lead, lead.id));
+    // Por padrão vai para o checkout próprio. CHECKOUT_MODO=motor (com o link do motor cadastrado) manda para o motor de reservas.
+    const motor = process.env.CHECKOUT_MODO === "motor" && montarLinkMotor(hotel, hotel.quartos.find((q) => q.id === lead.quarto_id), lead, lead.id);
+    res.redirect(302, motor || `/pagamento?lead=${encodeURIComponent(lead.id)}`);
   } catch (err) {
     console.error(err);
     res.status(500).send("Erro");

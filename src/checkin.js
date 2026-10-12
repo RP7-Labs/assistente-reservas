@@ -2,6 +2,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import { carregarHotel, noHotel } from "./catalogo.js";
+import { simulacaoPermitida } from "./tenant.js";
 import {
   localizarHotel,
   buscarCheckin, salvarCheckin, listarCheckins, listarUnidades, buscarReserva, listarDados, listarPagamentos,
@@ -72,7 +73,11 @@ export async function emitirSenha(codigo, { buscarFn = fetch, cfg = configTTLock
   const { inicio, fim } = janelaSenha(hotel, reserva);
   const base = { ...ck, unidade: unidade.numero, senha_inicio: inicio.toISOString(), senha_fim: fim.toISOString(), senha_erro: null };
   const entrada = fechadurasEntrada(unidades);
-  if (!cfg || (!unidade.lock_id && !entrada.length)) return salvarCheckin({ ...base, senha: novaSenha(), senha_id: null, senhas_extra: [], senha_status: "simulada" });
+  if (!cfg || (!unidade.lock_id && !entrada.length)) {
+    // Sem fechadura ligada: em produção não inventa senha (a recepção entrega); fora do ar, senha simulada para testes
+    if (!simulacaoPermitida()) return salvarCheckin({ ...base, senha: null, senha_id: null, senhas_extra: [], senha_status: "sem_fechadura", senha_erro: !cfg ? "Integração TTLock/TTHotel não configurada." : `Unidade ${unidade.numero} sem fechadura ligada.` });
+    return salvarCheckin({ ...base, senha: novaSenha(), senha_id: null, senhas_extra: [], senha_status: "simulada" });
+  }
 
   // Entrada primeiro: é onde a senha mais pode coincidir com a de outro hóspede. Se algo falhar,
   // apaga o que já foi criado e tenta de novo com outra senha.

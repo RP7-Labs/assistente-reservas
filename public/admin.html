@@ -54,6 +54,7 @@
   .barra { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; min-width: 120px; margin-bottom: 4px }
   .barra span { display: block; height: 100%; border-radius: 999px }
   .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px }
+  table.catalogo input, table.catalogo textarea { width: 100%; min-width: 70px; padding: 6px 8px; font-size: 13.5px } table.catalogo td { vertical-align: top } table.catalogo input[data-c^="preco"] { min-width: 115px } table.catalogo input[type=number]:not([data-c^="preco"]) { min-width: 64px; max-width: 80px }
   .aviso { color: var(--muted); font-size: 13px; margin-top: 10px; padding: 10px 14px; background: var(--surface-2); border-radius: var(--radius-sm) }
   details.item summary { cursor: pointer; list-style: none; display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
 
@@ -152,6 +153,9 @@
     <div class="lista" id="geralAtend"></div>
     <h2>Locações em processo</h2>
     <div class="lista" id="geralProc"></div>
+    <h2>Integrações</h2>
+    <div class="tabela"><table><thead><tr><th>Integração</th><th>Situação</th><th>Teste de conexão</th><th></th></tr></thead><tbody id="tbIntegr"></tbody></table></div>
+    <p class="aviso">O teste faz uma chamada real à integração, sem cobrar, enviar mensagem ou gravar nada. Use as chaves de sandbox/homologação primeiro. Em produção, o que não estiver configurado fica desligado (sem simulação): pagamento online indisponível e senha entregue pela recepção.</p>
   </section>
 
   <section data-sec="atendimentos" hidden>
@@ -201,6 +205,19 @@
       <tbody id="tbQuartos"></tbody>
     </table></div>
     <p class="aviso">A disponibilidade soma as reservas registradas aqui e as datas bloqueadas pelos canais sincronizados (Airbnb e outros, na aba Canais). Reservas de balcão ou telefone entram por "Registrar reserva".</p>
+
+    <h3 style="margin:26px 0 6px">Catálogo e preços</h3>
+    <p class="mut" style="margin:0 0 10px">É o que o assistente oferece e cobra. Quarto sem diária fica "sob consulta": o assistente não gera link e chama a equipe. Toda alteração fica registrada na auditoria.</p>
+    <form id="formCatalogo">
+      <div class="tabela"><table class="catalogo">
+        <thead><tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Adultos</th><th>Pessoas</th><th>Unidades</th><th>Diária a partir de (R$)</th><th>Mensal (R$)</th><th>Mín. noites mensal</th><th>Código no motor</th><th></th></tr></thead>
+        <tbody id="tbCatalogo"></tbody>
+      </table></div>
+      <div style="display:flex;gap:8px;margin:10px 0"><button type="button" class="btn" id="maisQuarto">+ Tipo de quarto</button></div>
+      <label class="mut" style="display:block;margin-top:8px">Políticas (mostradas aos hóspedes)<textarea name="politicas" rows="2" style="width:100%"></textarea></label>
+      <label class="mut" style="display:block;margin-top:8px">Link do motor de reservas (opcional; use {codigo_motor}, {checkin}, {checkout}, {adultos}, {criancas})<input name="link_motor" style="width:100%" placeholder="https://..."></label>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:12px"><button class="btn prim">Salvar catálogo</button><span class="erro" id="catErro"></span><span class="mut" id="catOk"></span></div>
+    </form>
   </section>
 
   <section data-sec="campanhas" hidden>
@@ -462,7 +479,7 @@ async function carregar() {
   nomes = Object.fromEntries(painel.quartos.map((q) => [q.id, q.nome]));
   $("#atualizado").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR");
   desenharGeral(); desenharAtend(); desenharLoc();
-  await Promise.all([carregarQuartos(), carregarUsuarios(), carregarPagamentos(), carregarCanais(), carregarCheckin(), carregarCampanhas()]);
+  await Promise.all([carregarQuartos(), carregarCatalogo(), carregarIntegracoes(), carregarUsuarios(), carregarPagamentos(), carregarCanais(), carregarCheckin(), carregarCampanhas()]);
 }
 
 async function carregarUsuarios() {
@@ -572,7 +589,7 @@ function fnrhTag(r) {
   const fase = r.fnrh_saida_em ? "saída registrada" : r.fnrh_entrada_em ? "entrada registrada" : "";
   return `<span class="tag ${c}">${t}</span>${fase ? `<div class="mut">${fase}</div>` : ""}${r.fnrh_erro ? `<div class="erro" style="font-size:12.5px">${esc(r.fnrh_erro)}</div>` : ""}`;
 }
-const SENHA = { ativa: ["Na fechadura", "t-ok"], simulada: ["Simulada", "t-info"], revogada: ["Revogada", ""], erro: ["Erro", "t-err"], sem_unidade: ["Sem unidade livre", "t-warn"] };
+const SENHA = { ativa: ["Na fechadura", "t-ok"], simulada: ["Simulada", "t-info"], revogada: ["Revogada", ""], erro: ["Erro", "t-err"], sem_unidade: ["Sem unidade livre", "t-warn"], sem_fechadura: ["Sem fechadura: entregar na recepção", "t-warn"] };
 async function carregarCheckin() {
   ck = await api("/checkins");
   $("#ckPendente").hidden = !ck.pendente; $("#ckPendente").textContent = ck.pendente || "";
@@ -811,6 +828,50 @@ document.addEventListener("click", async (e) => {
     try { await api(`/canais/${encodeURIComponent(rm.dataset.canalRemover)}`, { method: "DELETE" }); await carregar(); } catch (err) { alert(err.message); }
   }
 });
+
+const linhaCatalogo = (q = {}) => `<tr>
+  <td><input data-c="id" value="${esc(q.id ?? "")}" required></td><td><input data-c="nome" value="${esc(q.nome ?? "")}" required style="min-width:120px"></td>
+  <td><textarea data-c="descricao" rows="2" style="min-width:200px">${esc(q.descricao ?? "")}</textarea></td>
+  <td><input data-c="capacidade_adultos" type="number" min="1" value="${q.capacidade_adultos ?? 2}"></td><td><input data-c="capacidade_total" type="number" min="1" value="${q.capacidade_total ?? 2}"></td>
+  <td><input data-c="unidades" type="number" min="0" value="${q.unidades ?? 0}"></td>
+  <td><input data-c="preco_a_partir" type="number" min="0" step="0.01" value="${q.preco_a_partir ?? ""}" placeholder="sob consulta"></td>
+  <td><input data-c="preco_mensal" type="number" min="0" step="0.01" value="${q.preco_mensal ?? ""}" placeholder="—"></td>
+  <td><input data-c="minimo_noites_mensal" type="number" min="7" value="${q.minimo_noites_mensal ?? 28}"></td>
+  <td><input data-c="codigo_motor" value="${esc(q.codigo_motor ?? "")}"></td>
+  <td><button type="button" class="btn" data-rmquarto>Remover</button><input type="hidden" data-c="apelidos" value="${esc((q.apelidos ?? []).join(","))}"></td></tr>`;
+async function carregarCatalogo() {
+  const c = await api("/catalogo");
+  $("#tbCatalogo").innerHTML = c.quartos.map(linhaCatalogo).join("");
+  const f = $("#formCatalogo"); f.politicas.value = c.politicas; f.link_motor.value = c.link_motor;
+}
+$("#maisQuarto").onclick = () => $("#tbCatalogo").insertAdjacentHTML("beforeend", linhaCatalogo());
+$("#tbCatalogo").onclick = (e) => { if (e.target.closest("[data-rmquarto]") && confirm("Remover este tipo de quarto do catálogo?")) e.target.closest("tr").remove(); };
+$("#formCatalogo").onsubmit = async (e) => {
+  e.preventDefault(); $("#catErro").textContent = ""; $("#catOk").textContent = "";
+  const quartos = [...$("#tbCatalogo").querySelectorAll("tr")].map((tr) => Object.fromEntries([...tr.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, i.value.trim() === "" ? null : i.value.trim()])));
+  try {
+    await api("/catalogo", { method: "PUT", body: JSON.stringify({ quartos, politicas: e.target.politicas.value, link_motor: e.target.link_motor.value }) });
+    $("#catOk").textContent = "Catálogo salvo."; await Promise.all([carregarCatalogo(), carregarQuartos()]);
+  } catch (err) { $("#catErro").textContent = err.message; }
+};
+
+const INTEGR = [["pagamento", "getnet", "Pagamento (Getnet)"], ["fechaduras", "fechaduras", "Fechaduras (TTLock/TTHotel)"], ["whatsapp", "whatsapp", "WhatsApp (Meta Cloud API)"], ["email", "email", "E-mail (Resend)"], ["fnrh", "fnrh", "FNRH Digital"]];
+async function carregarIntegracoes() {
+  const h = await fetch("/api/health").then((r) => r.json()).catch(() => ({ servicos: [] }));
+  const por = Object.fromEntries((h.servicos || []).map((x) => [x.nome, x]));
+  $("#tbIntegr").innerHTML = INTEGR.map(([chave, teste, nome]) => {
+    const sv = por[chave] || {};
+    const cls = sv.estado === "ok" ? "t-ok" : sv.estado === "erro" ? "t-err" : "t-warn";
+    return `<tr><td><strong>${esc(nome)}</strong></td><td><span class="tag ${cls}">${esc(sv.estado || "—")}</span> <span class="mut">${esc(sv.detalhe || "")}</span></td><td class="mut" id="teste-${teste}">—</td><td><button class="btn" data-testar="${teste}">Testar</button></td></tr>`;
+  }).join("");
+}
+$("#tbIntegr").onclick = async (e) => {
+  const b = e.target.closest("[data-testar]"); if (!b) return;
+  const cel = $(`#teste-${b.dataset.testar}`); cel.textContent = "Testando…"; b.disabled = true;
+  try { const r = await api(`/integracoes/${b.dataset.testar}/testar`, { method: "POST" }); cel.innerHTML = `<span class="tag ${r.ok ? (r.parcial ? "t-warn" : "t-ok") : "t-err"}">${r.ok ? "ok" : "falhou"}</span> ${esc(r.detalhe)}`; }
+  catch (err) { cel.textContent = err.message; }
+  b.disabled = false;
+};
 
 async function carregarQuartos() {
   const data = $("#dataQuartos").value || hojeISO();

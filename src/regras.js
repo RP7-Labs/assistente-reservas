@@ -22,7 +22,7 @@ const iso = (a, m, d) => {
 };
 const somarDias = (data, n) => new Date(Date.parse(data) + n * 86_400_000).toISOString().slice(0, 10);
 const br = (data) => data.slice(8, 10) + "/" + data.slice(5, 7);
-const reais = (v) => `R$ ${Number(v).toLocaleString("pt-BR")}`;
+const reais = (v) => (Number(v) > 0 ? `R$ ${Number(v).toLocaleString("pt-BR")}` : "preço sob consulta");
 
 // Dia/mês sem ano: usa o ano atual, ou o próximo se a data já passou
 function comAno(dia, mes, ano, hoje) {
@@ -146,7 +146,7 @@ const MENU = [op("Fazer uma reserva"), op("Ver quartos e preços"), op("Dúvidas
 
 function botoes(campo, hotel, estado, hoje) {
   if (campo === "opcao") return estado.periodo.opcoes.map((o) => op(rotuloOpcao(o), textoOpcao(o)));
-  if (campo === "quarto") return hotel.quartos.map((q) => op(`${q.nome} · ${reais(q.preco_a_partir)}`, q.nome)).concat(op("Ver detalhes dos quartos"));
+  if (campo === "quarto") return hotel.quartos.map((q) => op(Number(q.preco_a_partir) > 0 ? `${q.nome} · ${reais(q.preco_a_partir)}` : q.nome, q.nome)).concat(op("Ver detalhes dos quartos"));
   if (campo === "checkin") {
     const fds = sugerirPeriodo("fim de semana", hoje);
     return [
@@ -243,7 +243,7 @@ function aplicar(estado, texto, hotel, hoje) {
   if (INTENCOES.quartos.test(t) || t === "ver detalhes dos quartos") {
     intencao = "info";
     quartosListados = true;
-    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. A partir de ${reais(q.preco_a_partir)} a diária.${q.preco_mensal ? ` Mensal: ${reais(q.preco_mensal)}.` : ""}`).join("\n"));
+    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. ${Number(q.preco_a_partir) > 0 ? `A partir de ${reais(q.preco_a_partir)} a diária.` : "Valor sob consulta com a equipe."}${q.preco_mensal ? ` Mensal: ${reais(q.preco_mensal)}.` : ""}`).join("\n"));
   } else if (INTENCOES.preco.test(t) && !entendeuAlgo) {
     intencao = "info";
     const q = hotel.quartos.find((x) => x.id === e.quarto);
@@ -307,6 +307,11 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
         acao = { tipo: "link", pedido };
         estado = vazio();
         opcoes = [op("Tirar uma dúvida", "Dúvidas sobre o hotel"), op("Fazer outra reserva", "nova reserva"), op("Falar com atendente")];
+      } else if (v.sem_preco) {
+        partes.push(v.erro);
+        acao = { tipo: "atendente", motivo: `Pedido sem preço cadastrado: ${v.quarto.nome}, ${br(pedido.checkin)} a ${br(checkout)}, ${pedido.adultos} adulto(s)` };
+        estado = vazio();
+        opcoes = [op("Tirar uma dúvida", "Dúvidas sobre o hotel")];
       } else {
         partes.push(v.erro);
         if (/comporta|quarto/i.test(v.erro)) estado.quarto = null;

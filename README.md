@@ -191,9 +191,26 @@ Painel para saber quanto cada canal e campanha investiu, vendeu e deixou de marg
   - Os custos (comissão OTA, taxa de pagamento, impostos, custo por noite) são estimativas: confirme com a contabilidade.
   - O teto de custo por reserva sai da margem.
   - O orçamento de ferramentas tem limite de R$ 500/mês.
-- **Demonstração.** A caixa "Demonstração" mostra dados fictícios, com aviso em destaque. Nada é gravado no banco.
 - **Banco.** Precisa da migração `db/014_resultados.sql`.
 
 UTMs para ligar campanha a reserva (use o id da campanha):
 - Google Ads, sufixo do URL final: `utm_source=google&utm_medium=cpc&utm_campaign={campaignid}` (deixe o tagueamento automático ligado para o gclid)
 - Meta Ads, parâmetros de URL: `utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.id}}`
+
+## Produção sem simulação (`SIMULACAO`)
+
+Na Vercel em produção nada é simulado: integração sem chave fica desligada.
+- **Pagamento.** A página manda o hóspede para o WhatsApp do hotel.
+- **Senha da porta.** Não é gerada; a recepção entrega.
+- **Ligar a simulação.** `SIMULACAO=1` liga de volta (por exemplo, numa demonstração). Fora da Vercel (testes, máquina local) a simulação fica ligada, a menos que `SIMULACAO=0`.
+- **Testar as chaves.** No admin, Visão geral, quadro Integrações, o botão "Testar" faz uma chamada real sem efeito.
+  - Getnet: pede o token.
+  - TTLock: lista as fechaduras.
+  - WhatsApp: lê o número.
+  - Resend: lê os domínios.
+
+## Catálogo e preços (admin > Quartos)
+
+- **Onde fica.** Tipos de quarto, unidades, diária, preço mensal, políticas e link do motor ficam no cadastro do hotel (tabela `hoteis`, campo `config`), que sobrepõe `data/hotel.json`. Toda alteração vai para a auditoria.
+- **Sem diária.** O quarto aparece como "preço sob consulta"; o assistente não gera link de pagamento e chama a equipe.
+- **Testes.** Os testes automatizados usam o catálogo fictício `test/fixtures/hotel-teste.json` (`HOTEL_FILE` no `npm test`), nunca o do hotel.

@@ -22,9 +22,10 @@ import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } fr
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento, acaoGetnet } from "./pagamento.js";
 import { receberLead, contatarLead, modoLeadsMeta } from "./leadsMeta.js";
-import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel } from "./store.js";
+import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel, registrarAuditoria } from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 import { resultados } from "./rotasResultados.js";
+import { testarIntegracao, TESTES } from "./integracoes.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -189,6 +190,69 @@ admin.get("/quartos", rota(async (req, res) => {
   const data = DATA_RE.test(req.query.data ?? "") ? req.query.data : new Date().toISOString().slice(0, 10);
   const [{ leads, reservas }, bloqueios] = await Promise.all([listarDados(), bloqueiosOuNada()]);
   res.json({ data, quartos: disponibilidade(carregarHotel(), reservas, leads, data, bloqueios) });
+}));
+
+// Testa a conexão com cada integração (chamada real, sem cobrar, enviar ou gravar nada)
+admin.post("/integracoes/:nome/testar", rota(async (req, res) => {
+  if (!TESTES[req.params.nome]) return res.status(404).json({ erro: "Integração desconhecida." });
+  const r = await testarIntegracao(req.params.nome);
+  await registrarAuditoria(req.admin.email, `testou integração ${req.params.nome}`, { ok: r.ok, detalhe: r.detalhe }).catch(() => {});
+  res.json(r);
+}));
+
+// ---- Catálogo e preços: o que o assistente oferece e cobra. Fica no cadastro do hotel (sobrepõe data/hotel.json). ----
+
+const CAMPOS_QUARTO = ["id", "nome", "descricao", "apelidos", "capacidade_adultos", "capacidade_total", "unidades", "preco_a_partir", "preco_mensal", "minimo_noites_mensal", "codigo_motor"];
+const MOTOR_RE = /^https:\/\/[^\s]+\{checkin\}[^\s]*$/;
+
+export function validarCatalogo(b) {
+  if (!Array.isArray(b?.quartos) || !b.quartos.length || b.quartos.length > 30) return { erro: "Cadastre de 1 a 30 tipos de quarto." };
+  const ids = new Set();
+  const quartos = [];
+  for (const [i, q] of b.quartos.entries()) {
+    const n = `Quarto ${i + 1}`;
+    const id = String(q.id ?? "").trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,30}$/.test(id) || id === ENTRADA) return { erro: `${n}: código inválido (letras minúsculas, números, - ou _).` };
+    if (ids.has(id)) return { erro: `${n}: código "${id}" repetido.` };
+    ids.add(id);
+    const nome = String(q.nome ?? "").trim().slice(0, 60);
+    if (!nome) return { erro: `${n}: informe o nome.` };
+    const inteiro = (v, min, max) => Number.isInteger(Number(v)) && Number(v) >= min && Number(v) <= max;
+    if (!inteiro(q.capacidade_adultos, 1, 20) || !inteiro(q.capacidade_total, 1, 20) || Number(q.capacidade_total) < Number(q.capacidade_adultos)) return { erro: `${nome}: capacidade inválida.` };
+    if (!inteiro(q.unidades, 0, 1000)) return { erro: `${nome}: quantidade de unidades inválida.` };
+    const preco = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+    const diaria = preco(q.preco_a_partir), mensal = preco(q.preco_mensal);
+    for (const [rot, v] of [["diária", diaria], ["preço mensal", mensal]]) if (v !== null && !(Number.isFinite(v) && v > 0 && v < 1_000_000)) return { erro: `${nome}: ${rot} inválido.` };
+    quartos.push({
+      id, nome, descricao: String(q.descricao ?? "").trim().slice(0, 400),
+      apelidos: (Array.isArray(q.apelidos) ? q.apelidos : String(q.apelidos ?? "").split(",")).map((a) => String(a).trim().toLowerCase()).filter(Boolean).slice(0, 15),
+      capacidade_adultos: Number(q.capacidade_adultos), capacidade_total: Number(q.capacidade_total), unidades: Number(q.unidades),
+      preco_a_partir: diaria, preco_mensal: mensal, minimo_noites_mensal: inteiro(q.minimo_noites_mensal, 7, 365) ? Number(q.minimo_noites_mensal) : 28,
+      codigo_motor: String(q.codigo_motor ?? "").trim().slice(0, 40),
+    });
+  }
+  const link = String(b.link_motor ?? "").trim();
+  if (link && !MOTOR_RE.test(link)) return { erro: "Link do motor: precisa começar com https:// e ter {checkin}." };
+  return { quartos, politicas: String(b.politicas ?? "").trim().slice(0, 800), motor: { link_modelo: link } };
+}
+
+admin.get("/catalogo", rota(async (_req, res) => {
+  const h = carregarHotel();
+  res.json({ quartos: h.quartos.map((q) => Object.fromEntries(CAMPOS_QUARTO.map((c) => [c, q[c] ?? null]))), politicas: h.politicas ?? "", link_motor: h.motor?.link_modelo ?? "" });
+}));
+
+admin.put("/catalogo", rota(async (req, res) => {
+  const v = validarCatalogo(req.body);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  const id = hotelId();
+  const atual = await buscarHotelRegistro(id);
+  const h = carregarHotel();
+  const antes = { quartos: h.quartos, politicas: h.politicas, motor: h.motor };
+  await salvarHotelRegistro({ ...(atual ?? { id, nome: h.nome, pais: h.pais ?? "BR", dominios: [], ativo: true }), id, config: { ...(atual?.config ?? {}), ...v } });
+  limparCacheHoteis();
+  await prepararHotel(id);
+  await registrarAuditoria(req.admin.email, "alterou catálogo e preços", { antes, depois: v }).catch((err) => console.error("Auditoria:", err.message));
+  res.json({ ok: true, ...v });
 }));
 
 // ---- Canais por iCal (Airbnb, Booking.com) ----

@@ -48,7 +48,7 @@
 <div class="topo"><span class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></span><span>Reserva direta</span></span>
   <span class="seguro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Pagamento seguro</span></div>
 <main>
-  <div class="teste">Ambiente de testes: nenhum valor é cobrado de verdade.</div>
+  <div class="teste" id="avisoTeste" hidden>Ambiente de testes: nenhum valor é cobrado de verdade.</div>
   <h1 id="titulo">Finalize sua reserva</h1>
   <div class="erro" id="erroGeral"></div>
 
@@ -178,7 +178,14 @@ async function iniciar() {
     if (pedido.moeda) moeda = { idioma: pedido.idioma || "pt-BR", codigo: pedido.moeda };
     provedor = d.provedor || "simulado";
     if (provedor === "getnet") { $("#formCartao").hidden = true; $("#areaCartaoGetnet").hidden = false; }
+    // Aviso de teste só no checkout simulado ou no ambiente de testes da Getnet
+    $("#avisoTeste").hidden = !(provedor === "simulado" || (provedor === "getnet" && d.ambiente !== "producao"));
     mostrarResumo(pedido);
+    if (provedor === "indisponivel") {
+      const zap = d.whatsapp ? `https://wa.me/${d.whatsapp}?text=${encodeURIComponent(`Olá! Quero concluir minha reserva: ${pedido.quarto}, de ${br(pedido.checkin)} a ${br(pedido.checkout)}.`)}` : null;
+      $("#erroGeral").innerHTML = `O pagamento online ainda não está disponível.${zap ? ` <a href="${zap}" target="_blank" rel="noopener">Fale com o hotel pelo WhatsApp</a> para concluir a reserva.` : " Fale com o hotel para concluir a reserva."}`;
+      return;
+    }
     const pg = d.pagamento;
     if (pg && ["pre_autorizado", "capturado", "pago"].includes(pg.status)) return mostrarSucesso(pg.codigo_reserva, detalheDe(pg));
     if (pg?.status === "liberado") { $("#erroGeral").textContent = "Esta reserva foi cancelada. Fale com o hotel pelo chat."; return; }
