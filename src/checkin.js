@@ -12,6 +12,8 @@ import { enviarEmail } from "./email.js";
 import { emailValido, normalizarEmail } from "./auth.js";
 import { registrarFicha } from "./fnrh.js";
 import { montarGuia, linkGuia } from "./guia.js";
+import { enviar as enviarWhatsapp } from "./whatsapp.js";
+import { envDoHotel } from "./tenant.js";
 
 const ATIVAS = new Set(["confirmada", "concluida"]);
 const br = (d) => String(d).slice(0, 10).split("-").reverse().join("/");
@@ -207,10 +209,98 @@ export function validarFicha(corpo, reserva) {
   return { hospedes, chegada_prevista: /^\d{2}:\d{2}$/.test(corpo.chegada_prevista ?? "") ? corpo.chegada_prevista : null };
 }
 
+// ---- Assinatura eletrônica simples (Lei 14.063/2020): imagem desenhada pelo titular + data + hash da ficha ----
+
+const PNG_RE = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/;
+export function registrarAssinatura(imagem, hospedes, { ip = null, agente = null, quando = new Date() } = {}) {
+  const m = PNG_RE.exec(String(imagem ?? ""));
+  if (!m) return { erro: "Assine no quadro para concluir o check-in." };
+  const bytes = Buffer.from(m[1], "base64");
+  if (bytes.length < 200 || bytes.length > 150_000 || bytes.subarray(1, 4).toString() !== "PNG") return { erro: "Assinatura inválida. Limpe o quadro e assine de novo." };
+  const em = quando.toISOString();
+  // O hash liga a assinatura a esta ficha e a este momento: qualquer alteração depois muda o código
+  const hash = crypto.createHash("sha256").update(bytes).update(JSON.stringify(hospedes)).update(em).digest("hex");
+  return { assinatura: { imagem: String(imagem), em, hash, ip: ip ? String(ip).slice(0, 64) : null, agente: agente ? String(agente).slice(0, 200) : null } };
+}
+
 // ---- E-mails ----
 
 export function textoLinkCheckin(base, token) {
   return `Adiante o check-in pelo celular (leva 2 minutos). Assim você recebe a senha da porta e não precisa passar na recepção:\n${linkCheckin(base, token)}`;
+}
+
+// ---- Envio da senha: na hora do pré-check-in ou X horas antes do check-in (hotel.senha_envio) ----
+
+const quandoBR = (d) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+
+// Momento de entregar a senha. null = na hora (padrão). { modo: "antes_checkin", horas_antes: 24 } = antes do horário de entrada.
+export function momentoEnvioSenha(hotel, reserva) {
+  const cfg = hotel.senha_envio ?? {};
+  if (cfg.modo !== "antes_checkin") return null;
+  const horas = Math.min(Math.max(Number(cfg.horas_antes) || 0, 0), 168);
+  return new Date(janelaSenha(hotel, reserva).inicio.getTime() - horas * 3_600_000);
+}
+
+// Número no formato internacional, como a Cloud API pede (quem mora no Brasil digita com DDD)
+export function numeroWhatsapp(titular) {
+  const d = String(titular?.telefone ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if ((titular.pais_residencia ?? "BR") === "BR" && (d.length === 10 || d.length === 11)) return `55${d}`;
+  return d.length >= 11 ? d : null;
+}
+
+// Manda a senha no WhatsApp do titular. Fora da janela de 24 horas de conversa a Meta só aceita modelo aprovado:
+// com WHATSAPP_MODELO_SENHA usa o modelo (parâmetros: nome, quarto, senha, validade); sem ele, texto simples.
+export async function whatsappSenha(hotel, reserva, ck, buscarFn = fetch) {
+  const titular = ck.hospedes?.[0];
+  const para = numeroWhatsapp(titular);
+  if (!para || !ck.senha) return { ok: false, erro: "sem número ou sem senha" };
+  const senha = comSufixo(ck.senha, hotel);
+  const validade = `${quandoBR(ck.senha_inicio)} até ${quandoBR(ck.senha_fim)}`;
+  const nome = String(titular.nome ?? "").split(" ")[0];
+  const env = envDoHotel();
+  const msg = env.WHATSAPP_MODELO_SENHA
+    ? { type: "template", template: { name: env.WHATSAPP_MODELO_SENHA, language: { code: env.WHATSAPP_MODELO_IDIOMA || "pt_BR" },
+      components: [{ type: "body", parameters: [nome, ck.unidade ?? "", senha, validade].map((text) => ({ type: "text", text: String(text) })) }] } }
+    : { type: "text", text: { body: `Olá, ${nome}! Check-in da reserva ${reserva.codigo_motor} concluído.\n\nQuarto: ${ck.unidade}\nSenha da porta: ${senha}\nVale de ${validade}.\n\nDigite os números e termine com ${hotel.guia?.teclado_sufixo ?? "#"}.${ck.senhas_extra?.length ? " A mesma senha abre a entrada do hotel." : ""} Não compartilhe a senha.\n${hotel.nome}` } };
+  return enviarWhatsapp(para, msg, buscarFn);
+}
+
+// Gera a senha e avisa o hóspede por e-mail e WhatsApp. Guarda como foi cada aviso.
+export async function entregarSenha(codigo, { buscarFn = fetch, cfg = configTTLock() } = {}) {
+  const hotel = carregarHotel();
+  const reserva = await buscarReserva(codigo);
+  const ck = await emitirSenha(codigo, { buscarFn, cfg });
+  const aviso = { em: new Date().toISOString(), email: null, whatsapp: null };
+  const e = await emailSenha(hotel, reserva, ck).catch((err) => ({ ok: false, erro: err.message }));
+  aviso.email = !e ? "sem e-mail" : e.ok ? "enviado" : e.provedor === "simulado" ? "não enviado: e-mail não configurado" : `não enviado: ${e.erro}`.slice(0, 200);
+  if (ck.senha) {
+    const w = await whatsappSenha(hotel, reserva, ck, buscarFn).catch((err) => ({ ok: false, erro: err.message }));
+    aviso.whatsapp = w.ok ? "enviado" : `não enviado: ${w.erro}`.slice(0, 200);
+  }
+  return salvarCheckin({ ...ck, senha_aviso: aviso });
+}
+
+// Tarefa agendada (a cada minuto): entrega as senhas cuja hora chegou
+export async function tarefasSenhas({ agora = new Date(), buscarFn = fetch, cfg = configTTLock() } = {}) {
+  const pendentes = (await listarCheckins()).filter((c) => c.status === "concluido" && c.senha_status === "agendada" && c.senha_envio_em && Date.parse(c.senha_envio_em) <= agora.getTime());
+  let entregues = 0;
+  for (const c of pendentes) {
+    const reserva = await buscarReserva(c.codigo_reserva);
+    if (!reserva || !ATIVAS.has(reserva.status)) { await salvarCheckin({ ...c, senha_status: null, senha_envio_em: null }); continue; }
+    await entregarSenha(c.codigo_reserva, { buscarFn, cfg }).then(() => entregues++).catch((err) => console.error("senha agendada:", err.message));
+  }
+  return { senhas: entregues };
+}
+
+async function emailAgendada(hotel, reserva, ck) {
+  const titular = ck.hospedes?.[0];
+  if (!titular?.email) return;
+  await enviarEmail({
+    para: titular.email, tipo: "checkin_concluido", leadId: reserva.lead_id ?? null,
+    assunto: `Check-in da reserva ${reserva.codigo_motor} – ${hotel.nome}`,
+    texto: `Olá, ${titular.nome.split(" ")[0]}!\n\nCheck-in concluído! Recebemos seus dados.\n\nA senha da porta chega por e-mail e WhatsApp em ${quandoBR(ck.senha_envio_em)}.\n\nEntrada: ${br(reserva.checkin)}, a partir das ${hotel.checkin} · Saída: ${br(reserva.checkout)}, até as ${hotel.checkout}\n\n${hotel.nome}${AVISO_TESTE}`,
+  });
 }
 
 async function emailSenha(hotel, reserva, ck) {
@@ -220,7 +310,7 @@ async function emailSenha(hotel, reserva, ck) {
   const corpo = temSenha
     ? `Check-in concluído! Seu quarto é o ${ck.unidade}.\n\nSenha da porta: ${comSufixo(ck.senha, hotel)}\nVale de ${new Date(ck.senha_inicio).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })} até ${new Date(ck.senha_fim).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.\n\nDigite os números no teclado da fechadura e termine com ${hotel.guia?.teclado_sufixo ?? "#"}.${ck.senhas_extra?.length ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""} Guarde este e-mail; não compartilhe a senha.`
     : "Check-in concluído! Recebemos seus dados. A recepção vai entregar o acesso ao quarto na chegada.";
-  await enviarEmail({
+  return enviarEmail({
     para: titular.email, tipo: "checkin_concluido", leadId: reserva.lead_id ?? null,
     assunto: `Check-in da reserva ${reserva.codigo_motor} – ${hotel.nome}`,
     texto: `Olá, ${titular.nome.split(" ")[0]}!\n\n${corpo}\n\nEntrada: ${br(reserva.checkin)} · Saída: ${br(reserva.checkout)}, até as ${hotel.checkout}\n\n${hotel.nome}${AVISO_TESTE}`,
@@ -278,7 +368,7 @@ checkin.get("/:token", rota(async (req, res) => {
     sugestao: concluido ? null : { nome: reserva.hospede, email: reserva.email, telefone: reserva.telefone },
     opcoes: OPCOES_FICHA,
     concluido,
-    acesso: concluido ? { unidade: ck.unidade, senha: ["ativa", "simulada"].includes(ck.senha_status) ? ck.senha : null, sufixo: hotel.guia?.teclado_sufixo ?? "#", entrada: Boolean(ck.senhas_extra?.length), inicio: ck.senha_inicio, fim: ck.senha_fim, simulada: ck.senha_status === "simulada" } : null,
+    acesso: concluido ? { unidade: ck.unidade, senha: ["ativa", "simulada"].includes(ck.senha_status) ? ck.senha : null, sufixo: hotel.guia?.teclado_sufixo ?? "#", entrada: Boolean(ck.senhas_extra?.length), inicio: ck.senha_inicio, fim: ck.senha_fim, simulada: ck.senha_status === "simulada", envio_em: ck.senha_status === "agendada" ? ck.senha_envio_em : null } : null,
   });
 }));
 
@@ -301,10 +391,18 @@ checkin.post("/:token", rota(async (req, res) => {
   if (reserva.checkout <= new Date().toISOString().slice(0, 10)) return res.status(409).json({ erro: "O período desta reserva já terminou." });
   const v = validarFicha(req.body, reserva);
   if (v.erro) return res.status(400).json({ erro: v.erro });
-  await salvarCheckin({ ...ck, hospedes: v.hospedes, chegada_prevista: v.chegada_prevista, status: "concluido", concluido_em: new Date().toISOString() });
+  const a = registrarAssinatura(req.body?.assinatura, v.hospedes, { ip: String(req.get("x-forwarded-for") ?? req.ip ?? "").split(",")[0].trim(), agente: req.get("user-agent") });
+  if (a.erro) return res.status(400).json({ erro: a.erro });
+  await salvarCheckin({ ...ck, hospedes: v.hospedes, chegada_prevista: v.chegada_prevista, assinatura: a.assinatura, status: "concluido", concluido_em: new Date().toISOString() });
   // Ficha vai para a FNRH Digital (ou fica "simulado" sem credenciais); uma falha aqui não segura a senha
   await registrarFicha(reserva.codigo_motor).catch((err) => console.error("FNRH:", err.message));
-  const final = await emitirSenha(reserva.codigo_motor);
-  await emailSenha(hotel, reserva, final).catch((err) => console.error("e-mail do check-in:", err.message));
+  // Senha na hora ou agendada para X horas antes do check-in (configurado pelo hotel)
+  const quando = momentoEnvioSenha(hotel, reserva);
+  if (quando && quando.getTime() > Date.now()) {
+    const agendado = await salvarCheckin({ ...(await buscarCheckin({ codigo: reserva.codigo_motor })), senha_status: "agendada", senha_envio_em: quando.toISOString() });
+    await emailAgendada(hotel, reserva, agendado).catch((err) => console.error("e-mail do check-in:", err.message));
+    return res.json({ ok: true, senha_envio_em: agendado.senha_envio_em, link_guia: linkGuia("", ck.token) });
+  }
+  await entregarSenha(reserva.codigo_motor).catch((err) => console.error("senha do check-in:", err.message));
   res.json({ ok: true, link_guia: linkGuia("", ck.token) });
 }));

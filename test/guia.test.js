@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { pngAssinatura } from "./fixtures/assinatura.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -59,7 +60,7 @@ test("página da estadia pelo token: dados da reserva, pré-check-in e depois a 
     assert.equal(antes.acesso.senha, null);
     assert.equal(antes.link_checkin, `/checkin?c=${token}`);
 
-    const fim = await fetch(`${base}/api/checkin/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hospedes: [titular], aceite: true }) });
+    const fim = await fetch(`${base}/api/checkin/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hospedes: [titular], aceite: true, assinatura: pngAssinatura() }) });
     assert.equal((await fim.json()).link_guia, `/estadia?c=${token}`);
     const depois = await (await fetch(`${base}/api/checkin/${token}/estadia`)).json();
     assert.equal(depois.acesso.unidade, "305");

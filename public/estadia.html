@@ -199,6 +199,7 @@ function cartaoAcesso() {
       <span class="quarto">${esc(a.unidade ?? "–")}</span><button class="senha" data-copiar="${esc(a.senha)}" data-rotulo="Senha" aria-label="Copiar senha">${esc(a.senha)}<span class="suf">${esc(a.sufixo ?? "")}</span></button></div>
     <p class="vale">Vale de ${quando(a.inicio)} até ${quando(a.fim)}. Digite os números e termine com <b>${esc(a.sufixo || "a tecla de confirmar")}</b>.${a.entrada ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""}</p>
     ${a.simulada ? '<div class="aviso">Ambiente de testes: esta senha ainda não está na fechadura.</div>' : ""}</section>`;
+  if (a.concluido && a.envio_em) return `<section class="card acesso"><h2>Seu acesso</h2><p>Check-in feito! A senha da porta aparece aqui e chega por e-mail e WhatsApp em <b>${quando(a.envio_em)}</b>.</p></section>`;
   if (a.concluido) return `<section class="card acesso"><h2>Seu acesso</h2><p>Check-in feito! A recepção entrega o acesso ao quarto na sua chegada.</p></section>`;
   return `<section class="card acesso"><h2>Seu acesso</h2>
     <p>${esc(a.texto ?? "")} Faça o pré-check-in pelo celular: leva 2 minutos e a senha aparece aqui.</p>

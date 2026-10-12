@@ -264,6 +264,13 @@
       <tbody id="tbCheckin"></tbody>
     </table></div>
     <p class="aviso" id="ckModo"></p>
+    <h2>Envio da senha</h2>
+    <form id="formSenhaEnvio" class="card" style="padding:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+      <label style="display:grid;gap:6px">Quando enviar a senha da porta<select name="modo"><option value="imediato">Assim que o hóspede conclui o pré-check-in</option><option value="antes_checkin">Algumas horas antes do horário de check-in</option></select></label>
+      <label style="display:grid;gap:6px" id="lblHoras">Horas antes do check-in<input name="horas_antes" type="number" min="0" max="168" value="24" style="width:110px"></label>
+      <button class="btn prim">Salvar</button><span class="mut" id="senhaEnvioMsg"></span>
+      <p class="mut" style="flex-basis:100%;margin:0">A senha vai por e-mail e WhatsApp e aparece no guia da estadia. No WhatsApp, fora de uma conversa aberta nas últimas 24 horas, a Meta só entrega com um modelo aprovado: configure WHATSAPP_MODELO_SENHA (parâmetros: nome, quarto, senha, validade).</p>
+    </form>
     <h2>Unidades e fechaduras</h2>
     <form id="formUnidade" class="card" style="padding:16px;display:grid;gap:12px;grid-template-columns:1fr 1.4fr 1.4fr auto;align-items:end;margin-bottom:12px">
       <label style="display:grid;gap:6px">Número<input name="numero" placeholder="101" required></label>
@@ -589,12 +596,20 @@ function fnrhTag(r) {
   const fase = r.fnrh_saida_em ? "saída registrada" : r.fnrh_entrada_em ? "entrada registrada" : "";
   return `<span class="tag ${c}">${t}</span>${fase ? `<div class="mut">${fase}</div>` : ""}${r.fnrh_erro ? `<div class="erro" style="font-size:12.5px">${esc(r.fnrh_erro)}</div>` : ""}`;
 }
+$("#formSenhaEnvio").modo.onchange = (e) => { $("#lblHoras").hidden = e.target.value !== "antes_checkin"; };
+$("#formSenhaEnvio").onsubmit = async (e) => {
+  e.preventDefault(); $("#senhaEnvioMsg").textContent = "";
+  try { await api("/senha-envio", { method: "PUT", body: JSON.stringify({ modo: e.target.modo.value, horas_antes: Number(e.target.horas_antes.value) }) }); $("#senhaEnvioMsg").textContent = "Salvo."; }
+  catch (err) { $("#senhaEnvioMsg").textContent = err.message; }
+};
 const SENHA = { ativa: ["Na fechadura", "t-ok"], simulada: ["Simulada", "t-info"], revogada: ["Revogada", ""], erro: ["Erro", "t-err"], sem_unidade: ["Sem unidade livre", "t-warn"], sem_fechadura: ["Sem fechadura: entregar na recepção", "t-warn"] };
 async function carregarCheckin() {
   ck = await api("/checkins");
   $("#ckPendente").hidden = !ck.pendente; $("#ckPendente").textContent = ck.pendente || "";
+  const fse = $("#formSenhaEnvio"); fse.modo.value = ck.senha_envio.modo || "imediato"; if (ck.senha_envio.horas_antes != null) fse.horas_antes.value = ck.senha_envio.horas_antes; $("#lblHoras").hidden = fse.modo.value !== "antes_checkin";
   $("#ckModo").textContent = ck.modo === "ttlock"
     ? "As senhas são gravadas nas fechaduras pela TTLock e valem só entre o horário de check-in e o de check-out. Reserva cancelada perde a senha na hora."
+    : !ck.simulacao ? "Sem integração com as fechaduras: o sistema não gera senha e a recepção entrega o acesso. Para ligar, configure na Vercel TTLOCK_CLIENT_ID e TTLOCK_CLIENT_SECRET (no TTHotel: Configurações > Integração) e TTLOCK_USERNAME e TTLOCK_PASSWORD."
     : "Modo de teste: as senhas são geradas aqui, mas não vão para nenhuma fechadura. Para ligar, configure na Vercel TTLOCK_CLIENT_ID e TTLOCK_CLIENT_SECRET (no TTHotel: Configurações > Integração) e TTLOCK_USERNAME e TTLOCK_PASSWORD (a conta onde estão as fechaduras). Depois as fechaduras aparecem aqui para ligar a cada unidade.";
   $("#ckModo").textContent += ck.modo_fnrh === "simulado"
     ? " A ficha de hóspedes fica guardada aqui e ainda não vai para a FNRH Digital: falta configurar FNRH_USUARIO, FNRH_SENHA e FNRH_CPF_SOLICITANTE (chave gerada no sistema da FNRH)."
@@ -611,7 +626,8 @@ async function carregarCheckin() {
       : r.status === "concluido" ? `<span class="tag t-ok">Concluído</span><div class="mut">${quando(r.concluido_em)}${r.chegada_prevista ? ` · chega ${esc(r.chegada_prevista)}` : ""}</div>`
       : r.link ? `<span class="tag t-warn">Aguardando hóspede</span>` : `<span class="tag">Link não criado</span>`;
     const [st, cor] = SENHA[r.senha_status] ?? ["—", ""];
-    const senha = r.senha ? `<code style="font-size:16px;letter-spacing:.1em">${esc(r.senha)}#</code> <span class="tag ${cor}">${st}</span>${r.senha_entrada?.length ? `<div class="mut">também na ${esc(r.senha_entrada.join(", "))}</div>` : ""}` : r.senha_status ? `<span class="tag ${cor}">${st}</span>` : `<span class="mut">—</span>`;
+    const avisoSenha = r.senha_aviso ? `<div class="mut">E-mail: ${esc(r.senha_aviso.email || "—")} · WhatsApp: ${esc(r.senha_aviso.whatsapp || "—")}</div>` : "";
+    const senha = r.senha_status === "agendada" ? `<span class="tag t-info">Envio agendado</span><div class="mut">${quando(r.senha_envio_em)}</div>` : r.senha ? `<code style="font-size:16px;letter-spacing:.1em">${esc(r.senha)}#</code> <span class="tag ${cor}">${st}</span>${r.senha_entrada?.length ? `<div class="mut">também na ${esc(r.senha_entrada.join(", "))}</div>` : ""}` : r.senha_status ? `<span class="tag ${cor}">${st}</span>` : `<span class="mut">—</span>`;
     const acoes = ativa ? [
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="copiar">Copiar link do guia</button>`,
       `<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="enviar">Enviar por e-mail</button>`,
@@ -624,7 +640,7 @@ async function carregarCheckin() {
     if (r.hospedes) acoes.unshift(`<button class="btn" data-ck="${esc(r.codigo)}" data-ckacao="ficha">Ver ficha</button>`);
     return `<tr><td><strong class="mono" style="color:var(--ink)">${esc(r.codigo)}</strong><div>${esc(r.hospede || "—")}</div><div class="mut">${esc(nomeQ[r.quarto_id] || r.quarto_id)}</div></td>
       <td>${dataBR(r.checkin)} a ${dataBR(r.checkout)}</td><td>${estado}</td><td>${fnrhTag(r)}</td><td><strong>${esc(r.unidade || "—")}</strong></td>
-      <td>${senha}${r.senha_erro ? `<div class="erro" style="font-size:12.5px">${esc(r.senha_erro)}</div>` : ""}</td>
+      <td>${senha}${avisoSenha}${r.assinatura ? `<div class="mut">Assinou em ${quando(r.assinatura.em)}</div>` : ""}${r.senha_erro ? `<div class="erro" style="font-size:12.5px">${esc(r.senha_erro)}</div>` : ""}</td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${acoes.join("")}</div></td></tr>`;
   }).join("") : `<tr><td colspan="7" class="mut" style="text-align:center">Nenhuma reserva confirmada daqui para frente.</td></tr>`;
   $("#listaUnidades").innerHTML = ck.unidades.length ? ck.unidades.map((u) => `<div class="item"><strong style="font-size:16px">${esc(u.numero)}</strong>
@@ -661,8 +677,10 @@ function verFicha(codigo) {
     <div class="mut">${esc(n.generos[h.genero] || h.genero)} · ${esc(n.racas[h.raca] || h.raca)} · Deficiência: ${esc(n.deficiencias[h.deficiencia] || h.deficiencia)}${h.tipo_deficiencia ? ` (${esc(n.tipos_deficiencia[h.tipo_deficiencia])})` : ""}</div>
     ${i === 0 ? `<div class="mut">${esc(h.email)} · ${esc(h.telefone)} · ${esc(h.cidade || "")}${h.uf ? `/${esc(h.uf)}` : ""}, ${esc(nomeP(h.pais_residencia))}</div>
       <div class="mut">Motivo: ${esc(n.motivos[h.motivo] || h.motivo)} · Transporte: ${esc(n.transportes[h.transporte] || h.transporte)}</div>` : ""}
-  </div>`).join("") + (r.fnrh_erro ? `<div class="erro">FNRH: ${esc(r.fnrh_erro)}</div>` : "");
+  </div>`).join("") + (r.fnrh_erro ? `<div class="erro">FNRH: ${esc(r.fnrh_erro)}</div>` : "")
+    + (r.assinatura ? `<div class="card" style="padding:14px"><strong>Assinatura do titular</strong><div class="mut">${quando(r.assinatura.em)} · código ${esc(r.assinatura.hash.slice(0, 16))}…</div><img id="imgAssin" alt="Assinatura" style="max-width:100%;border:1px solid var(--border);border-radius:8px;margin-top:8px;background:#fff"></div>` : "");
   $("#dlgFicha").showModal();
+  if (r.assinatura) api(`/checkins/${encodeURIComponent(codigo)}/assinatura`).then((a) => { $("#imgAssin").src = a.imagem; }).catch(() => {});
 }
 $("#formUnidade").addEventListener("submit", async (e) => {
   e.preventDefault(); $("#unidadeErro").textContent = "";

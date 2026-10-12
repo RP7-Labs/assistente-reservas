@@ -41,7 +41,7 @@ export function montarGuia({ hotel, reserva, ck, quarto, hoje = hojeNoFuso(hotel
       codigo: reserva.codigo_motor, quarto: quarto?.nome ?? reserva.quarto_id, checkin: reserva.checkin, checkout: reserva.checkout,
       adultos: reserva.adultos, criancas: reserva.criancas, ativa, ...momento(reserva, hoje),
     },
-    acesso: { concluido, unidade: concluido ? ck.unidade ?? null : null, senha, sufixo: g.teclado_sufixo ?? "#", entrada: Boolean(senha && ck.senhas_extra?.length), inicio: senha ? ck.senha_inicio : null, fim: senha ? ck.senha_fim : null, simulada: ck.senha_status === "simulada", texto: g.acesso ?? null },
+    acesso: { concluido, unidade: concluido ? ck.unidade ?? null : null, senha, sufixo: g.teclado_sufixo ?? "#", entrada: Boolean(senha && ck.senhas_extra?.length), inicio: senha ? ck.senha_inicio : null, fim: senha ? ck.senha_fim : null, simulada: ck.senha_status === "simulada", envio_em: concluido && ck.senha_status === "agendada" ? ck.senha_envio_em : null, texto: g.acesso ?? null },
     checkin: { obs: g.checkin_obs ?? null },
     checkout: { obs: g.checkout_obs ?? null, lista: (g.checkout_lista ?? []).map(([titulo, texto]) => ({ titulo, texto })) },
     estacionamento: est ? { valor: alta ? est.alta : est.baixa, alta, baixa_valor: est.baixa, alta_valor: est.alta, texto: est.texto } : null,

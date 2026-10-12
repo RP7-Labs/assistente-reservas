@@ -10,7 +10,7 @@ import { pagamento, rotaLembretes, enviarLembretes } from "./pagamento.js";
 import { configGetnet } from "./getnet.js";
 import { modoEmail } from "./email.js";
 import { calendarioExportado, sincronizarCanais } from "./canais.js";
-import { checkin } from "./checkin.js";
+import { checkin, tarefasSenhas } from "./checkin.js";
 import { modoFechaduras } from "./fechaduras.js";
 import { modoFNRH, tarefasFNRH } from "./fnrh.js";
 import { configPublica, normalizarOrigem, registrarOrigem, codigoWhatsapp, linkWhatsappSite } from "./rastreio.js";
@@ -213,6 +213,7 @@ export async function tarefasDeTodosOsHoteis(base) {
     resultado[id] = await noHotel(id, async () => {
       await sincronizarCanais().catch((err) => console.error(`iCal (${id}):`, err.message));
       await tarefasFNRH().catch((err) => console.error(`FNRH (${id}):`, err.message));
+      await tarefasSenhas().catch((err) => console.error(`senhas (${id}):`, err.message));
       return enviarLembretes(base).catch((err) => ({ erro: err.message }));
     });
   }

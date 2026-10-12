@@ -2,18 +2,18 @@ import crypto from "node:crypto";
 import express from "express";
 import { gerarHash, conferirSenha, criarToken, lerToken, normalizarEmail, emailValido } from "./auth.js";
 import { carregarHotel, noHotel, prepararHotel, limparCacheHoteis } from "./catalogo.js";
-import { hotelId, HOTEL_PADRAO, SLUG_RE } from "./tenant.js";
+import { hotelId, HOTEL_PADRAO, SLUG_RE, simulacaoPermitida } from "./tenant.js";
 import { PAISES } from "./paises.js";
 import {
   listarConversas, listarDados, marcarAtendente, salvarReserva, atualizarStatusReserva,
   buscarAdmin, buscarAdminPorEmail, listarAdmins, criarAdmin, atualizarAdmin,
   listarPagamentos, buscarPagamento, salvarPagamento, listarEmails, buscarLead,
   listarCanais, listarBloqueios, salvarCanal, removerCanal,
-  listarUnidades, salvarUnidade, removerUnidade, listarCheckins, buscarReserva,
+  listarUnidades, salvarUnidade, removerUnidade, listarCheckins, buscarCheckin, buscarReserva,
   listarOrigens, listarConversoes, listarConversasResumo, listarVisitas,
 } from "./store.js";
 import { novoToken, urlValida } from "./ical.js";
-import { garantirCheckin, emitirSenha, revogarSenha, OPCOES_FICHA, ENTRADA } from "./checkin.js";
+import { garantirCheckin, entregarSenha, revogarSenha, OPCOES_FICHA, ENTRADA } from "./checkin.js";
 import { linkGuia, textoLinkGuia } from "./guia.js";
 import { modoFechaduras, configTTLock, listarFechadurasTTLock } from "./fechaduras.js";
 import { modoFNRH, registrarFicha, eventoFNRH } from "./fnrh.js";
@@ -236,6 +236,28 @@ export function validarCatalogo(b) {
   return { quartos, politicas: String(b.politicas ?? "").trim().slice(0, 800), motor: { link_modelo: link } };
 }
 
+// Grava um trecho da configuração do hotel no cadastro (tabela hoteis) e registra na auditoria
+async function salvarConfigHotel(req, campos, acao) {
+  const id = hotelId();
+  const atual = await buscarHotelRegistro(id);
+  const h = carregarHotel();
+  const antes = Object.fromEntries(Object.keys(campos).map((k) => [k, h[k] ?? null]));
+  await salvarHotelRegistro({ ...(atual ?? { id, nome: h.nome, pais: h.pais ?? "BR", dominios: [], ativo: true }), id, config: { ...(atual?.config ?? {}), ...campos } });
+  limparCacheHoteis();
+  await prepararHotel(id);
+  await registrarAuditoria(req.admin.email, acao, { antes, depois: campos }).catch((err) => console.error("Auditoria:", err.message));
+}
+
+// Quando a senha da porta é enviada: na hora do pré-check-in ou X horas antes do horário de check-in
+admin.put("/senha-envio", rota(async (req, res) => {
+  const modo = req.body?.modo === "antes_checkin" ? "antes_checkin" : "imediato";
+  const horas = Number(req.body?.horas_antes);
+  if (modo === "antes_checkin" && !(Number.isInteger(horas) && horas >= 0 && horas <= 168)) return res.status(400).json({ erro: "Horas antes do check-in: de 0 a 168." });
+  const senha_envio = modo === "imediato" ? { modo } : { modo, horas_antes: horas };
+  await salvarConfigHotel(req, { senha_envio }, "alterou envio da senha");
+  res.json({ ok: true, senha_envio });
+}));
+
 admin.get("/catalogo", rota(async (_req, res) => {
   const h = carregarHotel();
   res.json({ quartos: h.quartos.map((q) => Object.fromEntries(CAMPOS_QUARTO.map((c) => [c, q[c] ?? null]))), politicas: h.politicas ?? "", link_motor: h.motor?.link_modelo ?? "" });
@@ -244,14 +266,7 @@ admin.get("/catalogo", rota(async (_req, res) => {
 admin.put("/catalogo", rota(async (req, res) => {
   const v = validarCatalogo(req.body);
   if (v.erro) return res.status(400).json({ erro: v.erro });
-  const id = hotelId();
-  const atual = await buscarHotelRegistro(id);
-  const h = carregarHotel();
-  const antes = { quartos: h.quartos, politicas: h.politicas, motor: h.motor };
-  await salvarHotelRegistro({ ...(atual ?? { id, nome: h.nome, pais: h.pais ?? "BR", dominios: [], ativo: true }), id, config: { ...(atual?.config ?? {}), ...v } });
-  limparCacheHoteis();
-  await prepararHotel(id);
-  await registrarAuditoria(req.admin.email, "alterou catálogo e preços", { antes, depois: v }).catch((err) => console.error("Auditoria:", err.message));
+  await salvarConfigHotel(req, v, "alterou catálogo e preços");
   res.json({ ok: true, ...v });
 }));
 
@@ -408,9 +423,10 @@ admin.get("/checkins", rota(async (req, res) => {
         chegada_prevista: c?.chegada_prevista ?? null, hospedes: c?.hospedes ?? null, concluido_em: c?.concluido_em ?? null,
         fnrh_status: c?.fnrh_status ?? null, fnrh_erro: c?.fnrh_erro ?? null, fnrh_entrada_em: c?.fnrh_entrada_em ?? null, fnrh_saida_em: c?.fnrh_saida_em ?? null,
         senha: c?.senha ?? null, senha_entrada: (c?.senhas_extra ?? []).map((x) => x.unidade ?? x.lock_id), senha_status: c?.senha_status ?? null, senha_erro: c?.senha_erro ?? null, senha_inicio: c?.senha_inicio ?? null, senha_fim: c?.senha_fim ?? null,
+        senha_envio_em: c?.senha_envio_em ?? null, senha_aviso: c?.senha_aviso ?? null, assinatura: c?.assinatura ? { em: c.assinatura.em, hash: c.assinatura.hash } : null,
       };
     });
-  res.json({ pendente, modo: modoFechaduras(), modo_fnrh: modoFNRH(), unidades, reservas: lista, nomes: NOMES, quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome })) });
+  res.json({ pendente, modo: modoFechaduras(), simulacao: simulacaoPermitida(), senha_envio: carregarHotel().senha_envio ?? { modo: "imediato" }, modo_fnrh: modoFNRH(), unidades, reservas: lista, nomes: NOMES, quartos: carregarHotel().quartos.map((q) => ({ id: q.id, nome: q.nome })) });
 }));
 
 // Cria (se preciso) o link do guia da estadia, que leva também ao pré-check-in; com enviar=true manda por e-mail para quem pagou
@@ -434,8 +450,17 @@ admin.post("/checkins/:codigo/link", rota(async (req, res) => {
 }));
 
 admin.post("/checkins/:codigo/senha", rota(async (req, res) => {
-  const ck = await emitirSenha(req.params.codigo);
-  res.json({ ok: !["erro", "sem_unidade"].includes(ck.senha_status), senha_status: ck.senha_status, erro: ck.senha_erro });
+  // Gera (ou troca) a senha e avisa o hóspede por e-mail e WhatsApp
+  const ck = await entregarSenha(req.params.codigo);
+  res.json({ ok: !["erro", "sem_unidade", "sem_fechadura"].includes(ck.senha_status), senha_status: ck.senha_status, erro: ck.senha_erro, aviso: ck.senha_aviso ?? null });
+}));
+
+// Assinatura do titular (imagem, data, hash e de onde assinou), para conferência ou disputa
+admin.get("/checkins/:codigo/assinatura", rota(async (req, res) => {
+  const c = await buscarCheckin({ codigo: req.params.codigo });
+  if (!c?.assinatura) return res.status(404).json({ erro: "Sem assinatura." });
+  res.set("Cache-Control", "no-store");
+  res.json(c.assinatura);
 }));
 
 admin.delete("/checkins/:codigo/senha", rota(async (req, res) => {

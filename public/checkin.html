@@ -35,6 +35,11 @@
   .senha { font: 800 40px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .18em; color: var(--ink); background: var(--surface-2); border-radius: 14px; padding: 18px 10px; margin: 10px 0 }
   .quarto { font-size: 15px; color: var(--muted) } .quarto b { color: var(--ink); font-size: 20px }
   .teste { background: var(--accent-50); color: var(--warn); border-radius: 12px; padding: 9px 14px; font-size: 13px; font-weight: 600; margin-top: 12px }
+  .scan { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--surface-2); border-radius: 12px; padding: 10px 12px; margin: -4px 0 14px; font-size: 13px; color: var(--ink-2) }
+  .scan button { border: 1.5px solid var(--brand); background: var(--surface); color: var(--brand); border-radius: 999px; padding: 7px 13px; font: 700 13px var(--font); cursor: pointer }
+  .scan .msg { flex-basis: 100% } .scan .msg:empty { display: none }
+  .assin { border: 1.5px dashed var(--border-strong); border-radius: 12px; background: var(--surface); touch-action: none; width: 100%; height: 160px; display: block; cursor: crosshair }
+  .assinTopo { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 6px } .assinTopo button { border: 0; background: none; color: var(--brand); font: 700 13px var(--font); cursor: pointer }
   @media (max-width: 460px) { .tripla { grid-template-columns: 1fr 1fr } .tripla > :first-child { grid-column: 1 / -1 } }
 </style>
 </head>
@@ -55,6 +60,9 @@
       <span class="rotulo">Motivo</span><div class="chips" data-campo="motivo"></div>
       <span class="rotulo">Como você vem</span><div class="chips" data-campo="transporte"></div>
       <label>Horário previsto de chegada (opcional) <input type="time" name="chegada_prevista"></label>
+      <div class="assinTopo"><span class="rotulo">Assinatura do titular (desenhe com o dedo)</span><button type="button" id="limparAssin">Limpar</button></div>
+      <canvas class="assin" id="assin" aria-label="Área para assinar"></canvas>
+      <p class="mut" style="font-size:12.5px;margin:6px 0 14px">Vale como assinatura eletrônica da ficha (Lei 14.063/2020). Guardamos a imagem, a data e um código de verificação.</p>
       <label class="aceite"><input type="checkbox" name="aceite" required>
         <span>Autorizo o uso destes dados para o registro de hóspedes exigido por lei (Ficha Nacional de Registro de Hóspedes) e para a minha hospedagem.</span></label>
       <div class="erro" id="erroFicha"></div>
@@ -69,6 +77,7 @@
     <a class="enviar" id="voltarGuia" style="display:block;text-decoration:none;margin-top:16px">Voltar ao guia da estadia</a>
   </div>
 </main>
+<script src="/mrz.js"></script>
 <script>
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -88,6 +97,7 @@ function cartaoHospede(i, sug) {
   const o = dados.opcoes;
   return `<div class="card" data-h="${i}">
     <h2><span class="num">${i + 1}</span>${titular ? "Titular da reserva" : `Hóspede ${i + 1}`}<span class="tag menor" hidden>menor de idade</span></h2>
+    <div class="scan"><button type="button" data-scan>📷 Ler documento</button><span>Passaporte ou nova Carteira de Identidade: fotografe o lado com as linhas &lt;&lt;&lt;. A foto não sai do seu celular.</span><input type="file" accept="image/*" capture="environment" data-arquivo hidden><span class="msg" data-scanmsg></span></div>
     <label>Nome completo <input name="nome" autocomplete="${titular ? "name" : "off"}" value="${esc(titular ? sug?.nome : "")}" required></label>
     <div class="dupla">
       <label>Nascimento <input type="date" name="nascimento" required></label>
@@ -167,6 +177,7 @@ function mostrarPronto(a) {
        <p class="mut" style="margin:14px 0 0">${a.entrada ? "Senha da entrada e do quarto" : "Senha da porta"}</p><div class="senha">${esc(a.senha)}<span class="suf">${esc(a.sufixo ?? "")}</span></div>
        <p class="mut">Vale de ${hora(a.inicio)} até ${hora(a.fim)}. Digite os números e termine com <b>${esc(a.sufixo || "a tecla de confirmar")}</b>.${a.entrada ? " A mesma senha abre a porta de entrada do hotel e a do seu quarto." : ""} Enviamos também para o seu e-mail.</p>
        ${a.simulada ? `<div class="teste">Ambiente de testes: esta senha não foi gravada em nenhuma fechadura.</div>` : ""}`
+    : a?.envio_em ? `<p>Recebemos seus dados. A senha da porta chega por e-mail e WhatsApp em <b>${new Date(a.envio_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</b> e aparece também no guia da estadia.</p>`
     : `<p>Recebemos seus dados. A recepção entrega o acesso ao quarto na sua chegada.</p>`;
   $("#voltarGuia").href = `/estadia?c=${encodeURIComponent(token)}`;
   $("#pronto").hidden = false;
@@ -190,6 +201,75 @@ async function iniciar() {
   $("#numViagem").textContent = Math.max(pessoas, 1) + 1;
   chips("motivo", dados.opcoes.motivos); chips("transporte", dados.opcoes.transportes);
   $("#ficha").hidden = false;
+  prepararAssinatura();
+}
+
+
+// ---- Leitura do documento pela câmera (OCR no próprio navegador, só a zona MRZ) ----
+let ocr = null;
+async function motorOCR() {
+  if (!ocr) ocr = (async () => {
+    await new Promise((ok, falha) => { const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload = ok; sc.onerror = falha; document.head.appendChild(sc); });
+    const w = await Tesseract.createWorker("eng");
+    await w.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<" });
+    return w;
+  })();
+  return ocr;
+}
+// Reduz a foto, passa para tons de cinza e aumenta o contraste; tenta a parte de baixo (onde fica a MRZ) e depois a foto inteira
+async function prepararFoto(arq) {
+  const img = await createImageBitmap(arq);
+  const escala = Math.min(1, 1800 / Math.max(img.width, img.height));
+  const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+  const tela = (y0, alt) => {
+    const c = document.createElement("canvas"); c.width = w; c.height = alt;
+    const x = c.getContext("2d"); x.filter = "grayscale(1) contrast(1.6)"; x.drawImage(img, 0, -y0 * 1, w, h);
+    return c;
+  };
+  return [tela(Math.round(h * 0.55), Math.round(h * 0.45)), tela(0, h)];
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-scan]"); if (b) $("[data-arquivo]", b.closest(".scan")).click(); });
+document.addEventListener("change", async (e) => {
+  if (!e.target.matches("[data-arquivo]") || !e.target.files[0]) return;
+  const card = e.target.closest("[data-h]"), msg = $("[data-scanmsg]", card);
+  msg.textContent = "Lendo o documento… (na primeira vez pode levar alguns segundos)";
+  try {
+    const w = await motorOCR();
+    let r = null;
+    for (const tela of await prepararFoto(e.target.files[0])) {
+      const { data } = await w.recognize(tela);
+      r = lerMRZ(data.text);
+      if (r) break;
+    }
+    if (!r) { msg.textContent = "Não consegui ler. Fotografe de perto, com boa luz, só o lado com as linhas <<<, ou preencha à mão."; return; }
+    const preencher = (nome, v) => { const el = card.querySelector(`[name=${nome}]`); if (el && v) { el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); el.dispatchEvent(new Event("input", { bubbles: true })); } };
+    preencher("nome", r.nome); preencher("nascimento", r.nascimento); preencher("genero", r.genero);
+    if (r.nacionalidade) { const sel = card.querySelector("[name=nacionalidade]"); if ([...sel.options].some((o) => o.value === r.nacionalidade)) preencher("nacionalidade", r.nacionalidade); else { preencher("nacionalidade", "outro"); preencher("nacionalidade_outro", r.nacionalidade); } }
+    preencher("documento_tipo", r.documento_tipo); preencher("documento_numero", r.documento_numero);
+    msg.textContent = `Lido: ${[r.nome, r.nascimento && r.nascimento.split("-").reverse().join("/"), r.documento_numero].filter(Boolean).join(" · ")}. Confira e complete o que faltar.`;
+  } catch { msg.textContent = "A leitura não funcionou neste aparelho. Preencha os dados à mão."; }
+  finally { e.target.value = ""; }
+});
+
+// ---- Assinatura na tela ----
+const assin = { tracos: 0 };
+function prepararAssinatura() {
+  const c = $("#assin"), r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
+  c.width = r.width * d; c.height = r.height * d;
+  const x = c.getContext("2d"); x.scale(d, d); x.lineWidth = 2.4; x.lineCap = "round"; x.lineJoin = "round"; x.strokeStyle = "#111";
+  let ativo = false;
+  const ponto = (ev) => { const b = c.getBoundingClientRect(); return [ev.clientX - b.left, ev.clientY - b.top]; };
+  c.onpointerdown = (ev) => { ativo = true; c.setPointerCapture(ev.pointerId); x.beginPath(); x.moveTo(...ponto(ev)); assin.tracos++; };
+  c.onpointermove = (ev) => { if (!ativo) return; x.lineTo(...ponto(ev)); x.stroke(); };
+  c.onpointerup = c.onpointercancel = () => { ativo = false; };
+  $("#limparAssin").onclick = () => { x.clearRect(0, 0, c.width, c.height); assin.tracos = 0; };
+}
+// Imagem da assinatura reduzida (PNG), para guardar junto da ficha
+function imagemAssinatura() {
+  const c = $("#assin"), m = document.createElement("canvas");
+  m.width = 600; m.height = Math.round(600 * c.height / c.width);
+  const x = m.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, m.width, m.height); x.drawImage(c, 0, 0, m.width, m.height);
+  return m.toDataURL("image/png");
 }
 
 $("#ficha").addEventListener("submit", async (e) => {
@@ -204,7 +284,8 @@ $("#ficha").addEventListener("submit", async (e) => {
     return h;
   });
   Object.assign(hospedes[0], escolha);
-  const corpo = { hospedes, chegada_prevista: e.target.chegada_prevista.value, aceite: e.target.aceite.checked };
+  if (!assin.tracos) { $("#erroFicha").textContent = "Assine no quadro acima para concluir."; return; }
+  const corpo = { hospedes, chegada_prevista: e.target.chegada_prevista.value, aceite: e.target.aceite.checked, assinatura: imagemAssinatura() };
   $("#btnEnviar").disabled = true; $("#erroFicha").textContent = "";
   try {
     const r = await fetch(`/api/checkin/${encodeURIComponent(token)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });

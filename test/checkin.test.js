@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pngAssinatura } from "./fixtures/assinatura.js";
 
 process.env.LOCAL_DB_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ck-")), "db.json");
 delete process.env.SUPABASE_URL;
@@ -222,8 +223,14 @@ test("fluxo do hóspede: link, ficha, senha simulada e e-mail", async () => {
     assert.equal(g.concluido, false);
     const ruim = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hospedes: [{ nome: "Ana" }], aceite: true }) });
     assert.equal(ruim.status, 400);
-    const ok = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hospedes: [titular], aceite: true }) });
+    const semAssinatura = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hospedes: [titular], aceite: true }) });
+    assert.equal(semAssinatura.status, 400);
+    assert.match((await semAssinatura.json()).erro, /Assine/);
+    const ok = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "teste" }, body: JSON.stringify({ hospedes: [titular], aceite: true, assinatura: pngAssinatura() }) });
     assert.equal(ok.status, 200);
+    const salvo = await store.buscarCheckin({ token });
+    assert.match(salvo.assinatura.hash, /^[0-9a-f]{64}$/);
+    assert.equal(salvo.assinatura.agente, "teste");
     const depois = await (await fetch(base)).json();
     assert.equal(depois.concluido, true);
     assert.equal(depois.acesso.unidade, "201");

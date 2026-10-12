@@ -170,6 +170,22 @@ Página pessoal do hóspede, pensada para o celular, com o mesmo token do pré-c
 - O hóspede digita os números e termina com `#` (`guia.teclado_sufixo` no `hotel.json`).
 - Cadastre a fechadura da entrada do hotel como unidade do tipo "Entrada do hotel": a mesma senha do quarto é criada nela também, com a mesma validade, e apagada junto.
 
+### Envio da senha (e-mail e WhatsApp) e horário
+
+- Rode `db/015_checkin_assinatura.sql` no Supabase.
+- Admin, aba **Check-in**, quadro **Envio da senha**: "assim que o hóspede concluir o check-in" (padrão) ou "X horas antes do horário de check-in" (0 a 168). Agendada, a senha sai pela tarefa de minuto (`/api/tarefas/lembretes`).
+- A senha vai por e-mail e direto no WhatsApp do hóspede. O resultado de cada envio aparece na ficha do admin.
+- Fora da janela de 24h da Meta, o WhatsApp só entrega mensagem de **modelo aprovado**. Crie no WhatsApp Manager um modelo (categoria Utilidade) e coloque o nome em `WHATSAPP_MODELO_SENHA` (idioma em `WHATSAPP_MODELO_IDIOMA`, padrão `pt_BR`). Texto sugerido, com 4 variáveis na ordem nome, quarto, senha, validade:
+
+  > Olá, {{1}}! Seu check-in está pronto. Quarto {{2}}. Senha da porta: {{3}} (digite os números e termine com #). Válida {{4}}.
+
+  Sem o modelo, vai como texto simples, que só chega se o hóspede tiver falado com o hotel nas últimas 24h.
+
+### Leitura de documento e assinatura
+
+- **Leitura de documento:** no check-in, o botão "Ler documento" abre a câmera e lê as linhas `<<<` do passaporte ou da nova Carteira de Identidade (CIN). O OCR (Tesseract.js) roda no celular: a foto não vai para o servidor. Só preenche campos cujos dígitos verificadores conferem; na CIN, o CPF entra só se for válido. RG antigo e CNH não têm essas linhas: o hóspede digita.
+- **Assinatura:** o titular assina com o dedo antes de concluir. Fica guardada a imagem, a data, IP, navegador e um código SHA-256 da imagem junto com a ficha (assinatura eletrônica simples, Lei 14.063/2020). O admin mostra a assinatura na ficha.
+
 ## Resultados de marketing (`/resultados`)
 
 Painel para saber quanto cada canal e campanha investiu, vendeu e deixou de margem. Fica no admin, em **Resultados**, e só abre com login. Ele não muda nada nas campanhas: só mostra números, alertas e recomendações, e quem decide e mexe no Google ou na Meta é uma pessoa.
