@@ -93,6 +93,10 @@ export function validarPedido(hotel, { quarto_id, checkin, checkout, adultos, cr
   const hojeStr = hoje.toISOString().slice(0, 10);
   if (checkin < hojeStr) return { ok: false, erro: "O check-in não pode ser no passado." };
   if (checkout <= checkin) return { ok: false, erro: "O check-out precisa ser depois do check-in." };
+  // Locação por temporada vai até 90 dias (Lei 8.245/1991, art. 48); mais que isso é outro tipo de contrato
+  if (hotel.tipo === "temporada" && (Date.parse(checkout) - Date.parse(checkin)) / 86_400_000 > 90) {
+    return { ok: false, erro: "Aluguel por temporada vai até 90 dias. Para períodos maiores, fale com a equipe." };
+  }
   if (!Number.isInteger(adultos) || adultos < 1) return { ok: false, erro: "Informe pelo menos 1 adulto." };
   if (!Number.isInteger(criancas) || criancas < 0) return { ok: false, erro: "Número de crianças inválido." };
   if (adultos > quarto.capacidade_adultos || adultos + criancas > quarto.capacidade_total) {

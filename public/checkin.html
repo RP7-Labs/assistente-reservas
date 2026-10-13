@@ -25,6 +25,7 @@
   .chips button { border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font: 600 13.5px var(--font); cursor: pointer }
   .chips button.ativo { border-color: var(--brand); color: var(--brand); background: var(--brand-50) }
   .rotulo { font-size: 13px; color: var(--ink-2); font-weight: 600 }
+  .contrato { background: var(--surface-2, #f6f7f8); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px } .contrato pre { white-space: pre-wrap; font: 12.5px/1.5 var(--font, system-ui); max-height: 260px; overflow: auto; margin: 6px 0 0 }
   .aceite { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; font-size: 13.5px; color: var(--ink-2) } .aceite input { width: 18px; height: 18px; margin: 2px 0 0; flex: none }
   .enviar { width: 100%; padding: 14px 16px; border: 0; border-radius: 12px; background: var(--brand); color: var(--brand-ink); font: 700 15px var(--font); cursor: pointer }
   .enviar:disabled { opacity: .6 }
@@ -63,8 +64,11 @@
       <div class="assinTopo"><span class="rotulo">Assinatura do titular (desenhe com o dedo)</span><button type="button" id="limparAssin">Limpar</button></div>
       <canvas class="assin" id="assin" aria-label="Área para assinar"></canvas>
       <p class="mut" style="font-size:12.5px;margin:6px 0 14px">Vale como assinatura eletrônica da ficha (Lei 14.063/2020). Guardamos a imagem, a data e um código de verificação.</p>
+      <div class="contrato" id="contrato" hidden><b>Contrato de locação por temporada</b><pre></pre><p class="mut" style="font-size:12px;margin:6px 0 0">A lista de ocupantes entra no contrato com os dados desta ficha.</p></div>
+      <label class="aceite" id="declMenores" hidden><input type="checkbox" name="declaracao_menores"><span></span></label>
       <label class="aceite"><input type="checkbox" name="aceite" required>
-        <span>Autorizo o uso destes dados para o registro de hóspedes exigido por lei (Ficha Nacional de Registro de Hóspedes) e para a minha hospedagem.</span></label>
+        <span id="textoAceite">Declaro que as informações são verdadeiras e autorizo o uso destes dados para o registro de hóspedes exigido por lei e para a minha hospedagem.</span></label>
+      <p class="mut" style="font-size:12.5px;margin:0 0 12px"><a href="/privacidade" target="_blank" rel="noopener">Política de privacidade</a> · <a href="/termos" target="_blank" rel="noopener">Termos da reserva</a></p>
       <div class="erro" id="erroFicha"></div>
       <button class="enviar" id="btnEnviar">Concluir check-in</button>
     </div>
@@ -109,6 +113,8 @@ function cartaoHospede(i, sug) {
       <label>Número <input name="documento_numero" autocomplete="off" required></label>
     </div>
     <p class="mut dicaMenor" hidden style="margin:-6px 0 12px">Para crianças, use o CPF que está na certidão de nascimento.</p>
+    <label class="vinculoMenor" hidden>Quem acompanha este menor de idade? <select name="vinculo"><option value="">Selecione</option>${opcoes(o.vinculos)}</select></label>
+    <div class="soFNRH"${dados.legal?.tipo === "temporada" ? " hidden" : ""}>
     <div class="dupla">
       <label>Gênero <select name="genero">${opcoes(o.generos, "NAOINFORMADO")}</select></label>
       <label>Cor ou raça <select name="raca">${opcoes(o.racas, "NAOINFORMAR")}</select></label>
@@ -116,6 +122,8 @@ function cartaoHospede(i, sug) {
     <div class="dupla">
       <label>Pessoa com deficiência? <select name="deficiencia" data-def>${opcoes(o.deficiencias, "NAO")}</select></label>
       <label class="tipoDef" hidden>Tipo <select name="tipo_deficiencia"><option value="">Selecione</option>${opcoes(o.tipos_deficiencia)}</select></label>
+    </div>
+    <p class="mut" style="font-size:12px;margin:-4px 0 12px">Gênero, cor ou raça e deficiência são pedidos pela ficha oficial do Ministério do Turismo (FNRH). Você pode escolher "Prefiro não informar".</p>
     </div>
     ${titular ? `
     <div class="dupla">
@@ -161,6 +169,8 @@ document.addEventListener("input", (e) => {
   const menor = e.target.value && idadeNa(e.target.value, dados.reserva.checkin) < 18;
   $(".menor", card).hidden = !menor;
   $(".dicaMenor", card).hidden = !menor;
+  $(".vinculoMenor", card).hidden = !menor;
+  $("#declMenores").hidden = ![...document.querySelectorAll("[data-h] .menor")].some((x) => !x.hidden);
 });
 
 function chips(campo, mapa) {
@@ -200,6 +210,10 @@ async function iniciar() {
   $("#hospedes").innerHTML = Array.from({ length: Math.max(pessoas, 1) }, (_, i) => cartaoHospede(i, dados.sugestao)).join("");
   $("#numViagem").textContent = Math.max(pessoas, 1) + 1;
   chips("motivo", dados.opcoes.motivos); chips("transporte", dados.opcoes.transportes);
+  const L = dados.legal ?? {};
+  if (L.consentimento) $("#textoAceite").textContent = L.consentimento;
+  if (L.declaracao_menores) $("#declMenores span").textContent = L.declaracao_menores;
+  if (L.contrato) { $("#contrato pre").textContent = L.contrato; $("#contrato").hidden = false; }
   $("#ficha").hidden = false;
   prepararAssinatura();
 }
@@ -285,7 +299,7 @@ $("#ficha").addEventListener("submit", async (e) => {
   });
   Object.assign(hospedes[0], escolha);
   if (!assin.tracos) { $("#erroFicha").textContent = "Assine no quadro acima para concluir."; return; }
-  const corpo = { hospedes, chegada_prevista: e.target.chegada_prevista.value, aceite: e.target.aceite.checked, assinatura: imagemAssinatura() };
+  const corpo = { hospedes, chegada_prevista: e.target.chegada_prevista.value, aceite: e.target.aceite.checked, declaracao_menores: e.target.declaracao_menores.checked, assinatura: imagemAssinatura() };
   $("#btnEnviar").disabled = true; $("#erroFicha").textContent = "";
   try {
     const r = await fetch(`/api/checkin/${encodeURIComponent(token)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });

@@ -15,6 +15,8 @@ import { linkGuia, textoLinkGuia } from "./guia.js";
 import { enviar as enviarWhatsapp } from "./whatsapp.js";
 import { enviarMeta } from "./rastreio.js";
 import * as getnet from "./getnet.js";
+import { simulacaoPermitida } from "./tenant.js";
+import { provar, textoTermosReserva, versao, dadosEmpresa, podeVenderOnline, pendenciasLegais } from "./legal.js";
 
 export const MINUTOS_LEMBRETE = 5;
 // Cartão de teste que sempre é recusado
@@ -122,7 +124,7 @@ async function emailReserva(hotel, lead, pag, ck, base) {
   await enviarEmail({
     para: pag.email, tipo: "reserva_confirmada", leadId: lead.id,
     assunto: `Reserva ${pag.codigo_reserva} confirmada – ${hotel.nome}`,
-    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkGuia(base, ck.token, hotel.guia?.marca ?? hotel.nome)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}${avisoTeste(pag)}`,
+    texto: `Olá, ${pag.nome}!\n\nSua reserva está confirmada.\n\nCódigo: ${pag.codigo_reserva}\nQuarto: ${r.quarto}\nEntrada: ${br(r.checkin)}, a partir das ${hotel.checkin}\nSaída: ${br(r.checkout)}, até as ${hotel.checkout}\n${r.noites} noite${r.noites > 1 ? "s" : ""}, ${pessoas(r)}\nTotal: ${reais(r.total)}\n\n${ck ? `${textoLinkGuia(base, ck.token, hotel.guia?.marca ?? hotel.nome)}\n\n` : ""}${hotel.politicas}\n\nAté breve!\n${hotel.nome}\n\n---\nCópia dos termos que você aceitou:\n\n${textoTermosReserva(hotel)}${avisoTeste(pag)}`,
   });
 }
 
@@ -148,7 +150,8 @@ export async function confirmar(hotel, lead, pag, campos, base) {
   await emailReserva(hotel, lead, salvo, ck, base);
   await whatsappReserva(hotel, lead, salvo, ck, base).catch((err) => console.error("WhatsApp da reserva:", err.message));
   // Conversão para a Meta (o navegador manda a mesma com o Pixel; o event_id evita contar duas vezes)
-  await enviarMeta({ evento: "Purchase", eventId: codigo, leadId: lead.id, valor: r.total, pessoa: salvo, url: `${base}/pagamento` })
+  // Dados pessoais só vão para a Meta com consentimento para anúncios (LGPD, art. 7º, I)
+  if (salvo.consente_anuncios) await enviarMeta({ evento: "Purchase", eventId: codigo, leadId: lead.id, valor: r.total, pessoa: salvo, url: `${base}/pagamento` })
     .catch((err) => console.error("Meta:", err.message));
   return { ...salvo, link_checkin: ck ? linkCheckin(base, ck.token) : null, link_guia: ck ? linkGuia(base, ck.token) : null };
 }
@@ -217,7 +220,8 @@ pagamento.get("/:lead", rota(async (req, res) => {
   // O link do pré-check-in aparece na tela quando a confirmação chega pela notificação da Getnet
   const ck = pag?.codigo_reserva && FINAIS.has(pag.status) ? await garantirCheckin(pag.codigo_reserva).catch(() => null) : null;
   if (p && ck) { p.link_checkin = linkCheckin(urlBase(req), ck.token); p.link_guia = linkGuia(urlBase(req), ck.token); }
-  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), ambiente: getnet.configGetnet()?.ambiente ?? null, whatsapp: hotel.guia?.contato?.whatsapp ?? hotel.whatsapp ?? null, expirado: lead.checkin < new Date().toISOString().slice(0, 10) });
+  res.json({ pedido: resumoPedido(hotel, lead), pagamento: p ?? null, provedor: getnet.modoPagamento(), ambiente: getnet.configGetnet()?.ambiente ?? null, whatsapp: hotel.guia?.contato?.whatsapp ?? hotel.whatsapp ?? null, expirado: lead.checkin < new Date().toISOString().slice(0, 10),
+    termos: { cancelamento: hotel.cancelamento ?? null, versao: versao(textoTermosReserva(hotel)), empresa: dadosEmpresa(hotel), aceito: Boolean(pag?.termos_versao) } });
 }));
 
 // Passo 1: dados do hóspede. Começa a contar os minutos para o lembrete por e-mail.
@@ -230,13 +234,28 @@ pagamento.post("/:lead/dados", rota(async (req, res) => {
   if (!nome) return res.status(400).json({ erro: "Informe seu nome." });
   if (!emailValido(email)) return res.status(400).json({ erro: "E-mail inválido." });
   if (c.pag && FINAIS.has(c.pag.status)) return res.status(409).json({ erro: "Esta reserva já foi paga." });
-  const pag = await salvarPagamento({ lead_id: c.lead.id, nome, email, telefone, status: "pendente", iniciado_em: c.pag?.iniciado_em ?? new Date().toISOString(), valor: resumoPedido(c.hotel, c.lead).total });
-  await enviarMeta({ evento: "InitiateCheckout", eventId: `ic-${c.lead.id}`, leadId: c.lead.id, valor: pag.valor, pessoa: { nome, email, telefone }, url: `${urlBase(req)}/pagamento` })
+  if (req.body?.aceite_termos !== true) return res.status(400).json({ erro: "Para continuar, leia e aceite os termos da reserva e a política de cancelamento." });
+  const consente_anuncios = req.body?.consente_anuncios === true;
+  const resumo = resumoPedido(c.hotel, c.lead);
+  // Prova do aceite: texto exato dos termos, resumo do que foi comprado, IP e navegador
+  const termos = textoTermosReserva(c.hotel);
+  await provar(req, {
+    tipo: "aceite_reserva", referencia: c.lead.id, titular: { nome, email, telefone }, textoTipo: "termos_reserva", texto: termos,
+    dados: { pedido: { quarto: resumo.quarto, checkin: resumo.checkin, checkout: resumo.checkout, noites: resumo.noites, adultos: resumo.adultos, criancas: resumo.criancas, total: resumo.total }, consente_anuncios },
+  });
+  const pag = await salvarPagamento({ lead_id: c.lead.id, nome, email, telefone, status: "pendente", iniciado_em: c.pag?.iniciado_em ?? new Date().toISOString(), valor: resumo.total, consente_anuncios, termos_versao: versao(termos) });
+  if (consente_anuncios) await enviarMeta({ evento: "InitiateCheckout", eventId: `ic-${c.lead.id}`, leadId: c.lead.id, valor: pag.valor, pessoa: { nome, email, telefone }, url: `${urlBase(req)}/pagamento` })
     .catch((err) => console.error("Meta:", err.message));
   res.json({ ok: true, status: pag.status });
 }));
 
 async function prontoParaPagar(c, res) {
+  // Sem razão social, CNPJ, endereço e política de cancelamento não se vende online (CDC; Decreto 7.962/2013)
+  if (!simulacaoPermitida() && !podeVenderOnline(c.hotel)) {
+    console.error("Venda online bloqueada, faltam dados legais:", pendenciasLegais(c.hotel).filter((x) => x.bloqueia).map((x) => x.campo).join(", "));
+    res.status(503).json({ erro: "O pagamento online ainda não está disponível. Fale com o hotel pelo WhatsApp para concluir a reserva." }); return false;
+  }
+  if (!c.pag?.termos_versao) { res.status(400).json({ erro: "Aceite os termos da reserva primeiro." }); return false; }
   if (getnet.modoPagamento() === "indisponivel") { res.status(503).json({ erro: "O pagamento online ainda não está disponível. Fale com o hotel pelo WhatsApp para concluir a reserva." }); return false; }
   if (!c.pag?.email) { res.status(400).json({ erro: "Preencha seus dados primeiro." }); return false; }
   if (FINAIS.has(c.pag.status)) { res.status(409).json({ erro: "Esta reserva já foi paga." }); return false; }

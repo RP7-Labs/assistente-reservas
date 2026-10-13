@@ -13,6 +13,7 @@ export function dadosSite(hotel) {
     endereco: g.endereco ?? null,
     mapa: g.mapa ?? null,
     contato: g.contato ?? null,
+    empresa: hotel.empresa ? { razao_social: hotel.empresa.razao_social ?? null, cnpj: hotel.empresa.cnpj ?? null, endereco: hotel.empresa.endereco ?? null } : null,
     fotos: g.fotos ?? {},
     destaques: s.destaques ?? [],
     quartos: (s.quartos ?? hotel.quartos.map((q) => ({ id: q.id }))).map((q) => {

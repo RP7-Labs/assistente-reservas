@@ -16,6 +16,14 @@
     {
       "source": "/site",
       "destination": "/api"
+    },
+    {
+      "source": "/privacidade",
+      "destination": "/api"
+    },
+    {
+      "source": "/termos",
+      "destination": "/api"
     }
   ],
   "functions": {

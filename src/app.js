@@ -16,6 +16,7 @@ import { modoFNRH, tarefasFNRH } from "./fnrh.js";
 import { configPublica, normalizarOrigem, registrarOrigem, codigoWhatsapp, linkWhatsappSite } from "./rastreio.js";
 import { dadosSite } from "./site.js";
 import { paginaSite } from "./sitePagina.js";
+import { legal, textoPrivacidade, textoTermosReserva, versao } from "./legal.js";
 
 export const app = express();
 // Guarda o corpo bruto para conferir a assinatura dos webhooks da Meta
@@ -119,6 +120,19 @@ app.get(["/site", "/site/"], (req, res) => {
   res.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=86400");
   res.type("html").send(paginaSite(carregarHotel(), { base }));
 });
+
+// Política de privacidade e termos da reserva, montados a partir do cadastro do hotel
+const escHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+app.get(["/privacidade", "/termos"], (req, res) => {
+  const h = carregarHotel();
+  const texto = req.path.startsWith("/privacidade") ? textoPrivacidade(h) : textoTermosReserva(h);
+  const [titulo, ...resto] = texto.split("\n");
+  res.set("Cache-Control", "no-store");
+  res.type("html").send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(titulo)}</title><link rel="stylesheet" href="/estilo.css">
+<style>body{background:var(--bg,#fafafa)}main{max-width:760px;margin:0 auto;padding:24px 16px 48px}pre{white-space:pre-wrap;font:15px/1.6 var(--font,system-ui);margin:0}.mut{font-size:12.5px}</style></head>
+<body><main><h1>${escHtml(titulo)}</h1><pre>${escHtml(resto.join("\n").trim())}</pre><p class="mut">Versão ${versao(texto)}</p></main></body></html>`);
+});
+app.use("/api/legal", legal);
 
 // Conteúdo público do site do hotel (/site)
 app.get("/api/site", (_req, res) => res.json(dadosSite(carregarHotel())));

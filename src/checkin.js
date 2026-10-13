@@ -14,6 +14,7 @@ import { registrarFicha } from "./fnrh.js";
 import { montarGuia, linkGuia } from "./guia.js";
 import { enviar as enviarWhatsapp } from "./whatsapp.js";
 import { envDoHotel } from "./tenant.js";
+import { provar, ehTemporada, textoConsentimentoFicha, textoDeclaracaoMenores, textoContratoTemporada, hashTexto } from "./legal.js";
 
 const ATIVAS = new Set(["confirmada", "concluida"]);
 const br = (d) => String(d).slice(0, 10).split("-").reverse().join("/");
@@ -135,7 +136,9 @@ export const DEFICIENCIAS = { NAO: "Não", SIM: "Sim", NAOINFORMAR: "Prefiro nã
 export const TIPOS_DEFICIENCIA = { FISICA: "Física", AUDITIVA_SURDEZ: "Auditiva / surdez", VISUAL: "Visual", INTELECTUAL: "Intelectual", MULTIPLA: "Múltipla" };
 // Países mais comuns (ISO 3166-1 alfa-2); "outro" aceita qualquer código de 2 letras
 export const PAISES = { BR: "Brasil", AR: "Argentina", UY: "Uruguai", PY: "Paraguai", CL: "Chile", BO: "Bolívia", PE: "Peru", CO: "Colômbia", VE: "Venezuela", MX: "México", US: "Estados Unidos", CA: "Canadá", PT: "Portugal", ES: "Espanha", IT: "Itália", FR: "França", DE: "Alemanha", GB: "Reino Unido", JP: "Japão", CN: "China" };
-export const OPCOES_FICHA = { motivos: MOTIVOS, transportes: TRANSPORTES, documentos: DOCUMENTOS, generos: GENEROS, racas: RACAS, deficiencias: DEFICIENCIAS, tipos_deficiencia: TIPOS_DEFICIENCIA, paises: PAISES };
+// Vínculo de cada menor com quem o acompanha (ECA, art. 82: só com os pais ou responsável, ou com autorização deles)
+export const VINCULOS = { PAIS: "Pai ou mãe", RESPONSAVEL_LEGAL: "Responsável legal (tutela ou guarda)", AUTORIZADO: "Outro adulto, com autorização dos pais" };
+export const OPCOES_FICHA = { vinculos: VINCULOS, motivos: MOTIVOS, transportes: TRANSPORTES, documentos: DOCUMENTOS, generos: GENEROS, racas: RACAS, deficiencias: DEFICIENCIAS, tipos_deficiencia: TIPOS_DEFICIENCIA, paises: PAISES };
 
 export function cpfValido(v) {
   const d = String(v ?? "").replace(/\D/g, "");
@@ -179,8 +182,10 @@ export function validarFicha(corpo, reserva) {
     const deficiencia = dominio(DEFICIENCIAS, h.deficiencia, "NAOINFORMAR");
     const tipo_deficiencia = deficiencia === "SIM" ? dominio(TIPOS_DEFICIENCIA, h.tipo_deficiencia, "") : null;
     if (deficiencia === "SIM" && !tipo_deficiencia) return { erro: `${quem}: escolha o tipo de deficiência.` };
+    const vinculo = menor ? dominio(VINCULOS, h.vinculo, "") : null;
+    if (menor && !vinculo) return { erro: `${quem}: é menor de idade; diga quem o acompanha.` };
     const item = {
-      nome, nascimento, menor, nacionalidade, documento_tipo, documento_numero,
+      nome, nascimento, menor, ...(menor ? { vinculo } : {}), nacionalidade, documento_tipo, documento_numero,
       genero, genero_descricao: genero === "OUTRO" ? texto(h.genero_descricao, 40) || null : null,
       raca: dominio(RACAS, h.raca, "NAOINFORMAR"), deficiencia, tipo_deficiencia,
     };
@@ -205,7 +210,8 @@ export function validarFicha(corpo, reserva) {
     }
     hospedes.push(item);
   }
-  if (!corpo?.aceite) return { erro: "Para continuar, aceite o uso dos dados para o registro de hóspedes." };
+  if (!corpo?.aceite) return { erro: "Para continuar, marque a declaração e a autorização no fim da ficha." };
+  if (hospedes.some((h) => h.menor) && corpo?.declaracao_menores !== true) return { erro: "Confirme a declaração sobre os menores de idade." };
   return { hospedes, chegada_prevista: /^\d{2}:\d{2}$/.test(corpo.chegada_prevista ?? "") ? corpo.chegada_prevista : null };
 }
 
@@ -367,6 +373,14 @@ checkin.get("/:token", rota(async (req, res) => {
     // Só o que ajuda a preencher; documentos já enviados não voltam para a página
     sugestao: concluido ? null : { nome: reserva.hospede, email: reserva.email, telefone: reserva.telefone },
     opcoes: OPCOES_FICHA,
+    // Textos que o hóspede aceita; a versão exata fica gravada como prova na conclusão
+    legal: {
+      tipo: ehTemporada(hotel) ? "temporada" : "hotel",
+      consentimento: textoConsentimentoFicha(hotel),
+      declaracao_menores: textoDeclaracaoMenores,
+      contrato: ehTemporada(hotel) && !concluido ? textoContratoTemporada(hotel, { reserva, valor: reserva.valor, hospedes: [] }) : null,
+      max_ocupantes: ehTemporada(hotel) ? Number(hotel.temporada?.max_ocupantes) || null : null,
+    },
     concluido,
     acesso: concluido ? { unidade: ck.unidade, senha: ["ativa", "simulada"].includes(ck.senha_status) ? ck.senha : null, sufixo: hotel.guia?.teclado_sufixo ?? "#", entrada: Boolean(ck.senhas_extra?.length), inicio: ck.senha_inicio, fim: ck.senha_fim, simulada: ck.senha_status === "simulada", envio_em: ck.senha_status === "agendada" ? ck.senha_envio_em : null } : null,
   });
@@ -391,11 +405,30 @@ checkin.post("/:token", rota(async (req, res) => {
   if (reserva.checkout <= new Date().toISOString().slice(0, 10)) return res.status(409).json({ erro: "O período desta reserva já terminou." });
   const v = validarFicha(req.body, reserva);
   if (v.erro) return res.status(400).json({ erro: v.erro });
+  const temporada = ehTemporada(hotel);
+  // Fora da FNRH, gênero, raça, deficiência, motivo e transporte não são necessários: não guarda (LGPD, art. 6º, III)
+  if (temporada) v.hospedes = v.hospedes.map(({ genero, genero_descricao, raca, deficiencia, tipo_deficiencia, motivo, transporte, ...h }) => h);
+  const maximo = Number(hotel.temporada?.max_ocupantes) || 0;
+  if (temporada && maximo && v.hospedes.length > maximo) return res.status(400).json({ erro: `O imóvel recebe no máximo ${maximo} pessoas.` });
   const a = registrarAssinatura(req.body?.assinatura, v.hospedes, { ip: String(req.get("x-forwarded-for") ?? req.ip ?? "").split(",")[0].trim(), agente: req.get("user-agent") });
   if (a.erro) return res.status(400).json({ erro: a.erro });
-  await salvarCheckin({ ...ck, hospedes: v.hospedes, chegada_prevista: v.chegada_prevista, assinatura: a.assinatura, status: "concluido", concluido_em: new Date().toISOString() });
-  // Ficha vai para a FNRH Digital (ou fica "simulado" sem credenciais); uma falha aqui não segura a senha
-  await registrarFicha(reserva.codigo_motor).catch((err) => console.error("FNRH:", err.message));
+  // Provas: ficha + consentimento (e o contrato, no aluguel por temporada), ligadas à assinatura
+  const titular = v.hospedes[0];
+  const quem = { nome: titular.nome, email: titular.email, documento: `${titular.documento_tipo} ${titular.documento_numero}` };
+  const comum = { ficha_hash: hashTexto(JSON.stringify(v.hospedes)), assinatura_hash: a.assinatura.hash, hospedes: v.hospedes.length,
+    menores: v.hospedes.filter((h) => h.menor).map((h) => ({ nome: h.nome, nascimento: h.nascimento, vinculo: h.vinculo })) };
+  const provas = [];
+  const consentimento = textoConsentimentoFicha(hotel);
+  provas.push(await provar(req, { tipo: "ficha_hospedes", referencia: reserva.codigo_motor, titular: quem, textoTipo: "consentimento_ficha", texto: consentimento,
+    dados: { ...comum, ...(comum.menores.length ? { declaracao_menores: textoDeclaracaoMenores } : {}) } }));
+  if (temporada) {
+    const contrato = textoContratoTemporada(hotel, { reserva, valor: reserva.valor, hospedes: v.hospedes });
+    provas.push(await provar(req, { tipo: "contrato_temporada", referencia: reserva.codigo_motor, titular: quem, textoTipo: "contrato_temporada", texto: contrato, dados: comum }));
+  }
+  await salvarCheckin({ ...ck, hospedes: v.hospedes, chegada_prevista: v.chegada_prevista, assinatura: { ...a.assinatura, provas: provas.map((p) => p.id) }, status: "concluido", concluido_em: new Date().toISOString() });
+  // Ficha vai para a FNRH Digital (ou fica "simulado" sem credenciais); uma falha aqui não segura a senha.
+  // Aluguel por temporada não é meio de hospedagem: não há FNRH.
+  if (!temporada) await registrarFicha(reserva.codigo_motor).catch((err) => console.error("FNRH:", err.message));
   // Senha na hora ou agendada para X horas antes do check-in (configurado pelo hotel)
   const quando = momentoEnvioSenha(hotel, reserva);
   if (quando && quando.getTime() > Date.now()) {

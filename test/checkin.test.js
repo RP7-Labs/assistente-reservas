@@ -30,16 +30,20 @@ test("CPF e senha", () => {
 test("ficha: códigos da FNRH, criança com responsável, todos preenchidos e aceite", () => {
   const reserva = { checkin: "2026-12-20", adultos: 1, criancas: 1 };
   assert.match(ck.validarFicha({ hospedes: [titular], aceite: true }, reserva).erro, /2 pessoas/);
-  const crianca = { nome: "Bia Souza", nascimento: "2018-01-01", nacionalidade: "BR", documento_tipo: "CPF", documento_numero: "111.444.777-35" };
-  assert.match(ck.validarFicha({ hospedes: [titular, crianca] }, reserva).erro, /aceite/);
+  const crianca = { nome: "Bia Souza", nascimento: "2018-01-01", nacionalidade: "BR", documento_tipo: "CPF", documento_numero: "111.444.777-35", vinculo: "PAIS" };
+  assert.match(ck.validarFicha({ hospedes: [titular, crianca], declaracao_menores: true }, reserva).erro, /declaração/);
+  // ECA, art. 82: menor só com os pais, responsável ou autorização, e o titular declara
+  assert.match(ck.validarFicha({ hospedes: [titular, { ...crianca, vinculo: "" }], aceite: true, declaracao_menores: true }, reserva).erro, /quem o acompanha/);
+  assert.match(ck.validarFicha({ hospedes: [titular, crianca], aceite: true }, reserva).erro, /menores de idade/);
   assert.match(ck.validarFicha({ hospedes: [titular, { ...crianca, documento_numero: "" }], aceite: true }, reserva).erro, /Hóspede 2: informe o CPF/);
   assert.match(ck.validarFicha({ hospedes: [{ ...titular, cidade_id: "" }, crianca], aceite: true }, reserva).erro, /cidade/);
-  const v = ck.validarFicha({ hospedes: [titular, crianca], aceite: true, chegada_prevista: "15:30" }, reserva);
+  const v = ck.validarFicha({ hospedes: [titular, crianca], aceite: true, declaracao_menores: true, chegada_prevista: "15:30" }, reserva);
   assert.equal(v.erro, undefined);
   assert.equal(v.hospedes[0].documento_numero, "52998224725");
   assert.equal(v.hospedes[0].uf, "MG");
   assert.equal(v.hospedes[0].cidade_id, 3170206);
   assert.equal(v.hospedes[1].menor, true);
+  assert.equal(v.hospedes[1].vinculo, "PAIS");
   assert.equal(v.hospedes[1].raca, "NAOINFORMAR");
   // Estrangeiro: passaporte e residência fora do Brasil, sem cidade do IBGE
   const gringo = { ...titular, nacionalidade: "ar", documento_tipo: "PASSAPORTE", documento_numero: "aab-123456", pais_residencia: "AR", uf: "", cidade_id: "", cidade: "Rosario" };
@@ -53,8 +57,8 @@ test("ficha: códigos da FNRH, criança com responsável, todos preenchidos e ac
 test("FNRH: monta o registro e envia ficha, entrada e cancelamento", async () => {
   const { montarRegistro, registrarFicha, eventoFNRH } = await import("../src/fnrh.js");
   const reserva = { codigo_motor: "P-FN01", quarto_id: "suite", checkin: "2026-12-20", checkout: "2026-12-22", hospede: "Ana Souza", status: "confirmada" };
-  const crianca = { nome: "Bia Souza", nascimento: "2018-01-01", nacionalidade: "BR", documento_tipo: "CPF", documento_numero: "11144477735" };
-  const { hospedes } = ck.validarFicha({ hospedes: [titular, crianca], aceite: true }, { ...reserva, adultos: 1, criancas: 1 });
+  const crianca = { nome: "Bia Souza", nascimento: "2018-01-01", nacionalidade: "BR", documento_tipo: "CPF", documento_numero: "11144477735", vinculo: "PAIS" };
+  const { hospedes } = ck.validarFicha({ hospedes: [titular, crianca], aceite: true, declaracao_menores: true }, { ...reserva, adultos: 1, criancas: 1 });
   const corpo = montarRegistro(reserva, hospedes);
   assert.deepEqual(corpo.reserva, { numero_reserva: "P-FN01", numero_reserva_ota: "", data_entrada: "2026-12-20", data_saida: "2026-12-22", quantidade_hospede_adulto: 1, quantidade_hospede_menor: 1, origem_reserva_id: "MEIOHOSPEDAGEM" });
   const [t, c] = corpo.dados_hospede;
@@ -231,6 +235,12 @@ test("fluxo do hóspede: link, ficha, senha simulada e e-mail", async () => {
     const salvo = await store.buscarCheckin({ token });
     assert.match(salvo.assinatura.hash, /^[0-9a-f]{64}$/);
     assert.equal(salvo.assinatura.agente, "teste");
+    // Prova do consentimento, ligada à assinatura e à ficha
+    const [prova] = await store.listarProvas({ referencias: ["P-FL01"] });
+    assert.equal(prova.tipo, "ficha_hospedes");
+    assert.equal(prova.dados.assinatura_hash, salvo.assinatura.hash);
+    assert.match((await store.buscarTextoLegal(prova.texto_hash)).texto, /Ficha Nacional de Registro de Hóspedes/);
+    assert.deepEqual(salvo.assinatura.provas, [prova.id]);
     const depois = await (await fetch(base)).json();
     assert.equal(depois.concluido, true);
     assert.equal(depois.acesso.unidade, "201");

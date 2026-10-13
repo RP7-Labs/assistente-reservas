@@ -22,10 +22,11 @@ import { sincronizarCanal, sincronizarCanais, bloqueiosOuNada, MINUTOS_SYNC } fr
 import { modoEmail, enviarEmail } from "./email.js";
 import { emailPagamento, acaoGetnet } from "./pagamento.js";
 import { receberLead, contatarLead, modoLeadsMeta } from "./leadsMeta.js";
-import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel, registrarAuditoria } from "./store.js";
+import { listarLeadsMeta, buscarLeadMeta, listarHoteis, buscarHotelRegistro, salvarHotelRegistro, localizarHotel, registrarAuditoria, listarProvas, verificarProvas } from "./store.js";
 import { montarLocacoes, disponibilidade, falas, resumoAtendimento, indicadores } from "./backoffice.js";
 import { resultados } from "./rotasResultados.js";
 import { testarIntegracao, TESTES } from "./integracoes.js";
+import { pendenciasLegais, dadosEmpresa, provar, textoTermosReserva, textoPrivacidade, textoContratoTemporada, versao } from "./legal.js";
 
 const STATUS_RESERVA = ["confirmada", "cancelada", "no_show", "concluida"];
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -261,6 +262,94 @@ admin.put("/senha-envio", rota(async (req, res) => {
 admin.get("/catalogo", rota(async (_req, res) => {
   const h = carregarHotel();
   res.json({ quartos: h.quartos.map((q) => Object.fromEntries(CAMPOS_QUARTO.map((c) => [c, q[c] ?? null]))), politicas: h.politicas ?? "", link_motor: h.motor?.link_modelo ?? "" });
+}));
+
+// ---- Dados legais (vendedor, cancelamento, aluguel por temporada) e provas ----
+
+const limpa = (v, max) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max) || null;
+export function validarLegal(b) {
+  const tipo = b?.tipo === "temporada" ? "temporada" : "hotel";
+  const e = b?.empresa ?? {};
+  const doc = String(e.cnpj ?? "").replace(/\D/g, "");
+  if (doc && doc.length !== 14 && doc.length !== 11) return { erro: "CNPJ (14 dígitos) ou CPF (11 dígitos)." };
+  for (const em of [e.email, e.encarregado?.email]) if (em && !emailValido(normalizarEmail(em))) return { erro: `E-mail inválido: ${em}` };
+  const empresa = {
+    razao_social: limpa(e.razao_social, 150), cnpj: doc || null, endereco: limpa(e.endereco, 200),
+    email: e.email ? normalizarEmail(e.email) : null, telefone: limpa(e.telefone, 30),
+    encarregado: { nome: limpa(e.encarregado?.nome, 100), email: e.encarregado?.email ? normalizarEmail(e.encarregado.email) : null },
+  };
+  const cancelamento = String(b?.cancelamento ?? "").trim().slice(0, 1500) || null;
+  const out = { tipo, empresa, cancelamento };
+  if (tipo === "temporada") {
+    const t = b?.temporada ?? {};
+    const max = Number(t.max_ocupantes);
+    if (t.max_ocupantes != null && t.max_ocupantes !== "" && !(Number.isInteger(max) && max >= 1 && max <= 50)) return { erro: "Máximo de ocupantes: de 1 a 50." };
+    // Inventário: uma linha por item, "item; quantidade; estado"
+    const linhas = Array.isArray(t.inventario) ? t.inventario : String(t.inventario ?? "").split("\n");
+    const inventario = linhas.map((l) => (typeof l === "string" ? l.split(";").map((x) => x.trim()) : [l.item, l.quantidade, l.estado]))
+      .filter(([item]) => item).slice(0, 200)
+      .map(([item, qtd, estado]) => ({ item: String(item).slice(0, 120), quantidade: Number.parseInt(qtd, 10) || 1, estado: limpa(estado, 120) ?? "bom" }));
+    out.temporada = {
+      locador: { nome: limpa(t.locador?.nome, 150), documento: String(t.locador?.documento ?? "").replace(/\D/g, "") || null, endereco: limpa(t.locador?.endereco, 200) },
+      imovel: { endereco: limpa(t.imovel?.endereco, 200), descricao: String(t.imovel?.descricao ?? "").trim().slice(0, 1000) || null },
+      max_ocupantes: Number.isInteger(max) && max > 0 ? max : null,
+      caucao: limpa(t.caucao, 300), regras: String(t.regras ?? "").trim().slice(0, 1500) || null, inventario,
+    };
+  }
+  return out;
+}
+
+admin.get("/legal", rota(async (_req, res) => {
+  const h = carregarHotel();
+  const [provas, problema] = await Promise.all([listarProvas({ limite: 30 }).catch(() => null), verificarProvas().catch((err) => ({ erro: err.message }))]);
+  res.json({
+    tipo: h.tipo === "temporada" ? "temporada" : "hotel", empresa: dadosEmpresa(h), cancelamento: h.cancelamento ?? "", temporada: h.temporada ?? null,
+    pendencias: pendenciasLegais(h), simulacao: simulacaoPermitida(),
+    versoes: { privacidade: versao(textoPrivacidade(h)), termos: versao(textoTermosReserva(h)) },
+    provas: provas?.map(({ id, tipo, referencia, titular, criado_em, ip, hash }) => ({ id, tipo, referencia, titular: titular?.nome ?? titular?.email ?? null, criado_em, ip, hash })) ?? null,
+    corrente: problema?.erro ? { erro: problema.erro } : problema ? { ok: false, ...problema } : { ok: true },
+  });
+}));
+
+admin.put("/legal", rota(async (req, res) => {
+  const v = validarLegal(req.body);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  await salvarConfigHotel(req, v, "alterou dados legais");
+  // O que o vendedor publicou também fica como prova (quem, quando e o texto exato)
+  const h = carregarHotel();
+  await provar(req, { tipo: "publicacao_termos", referencia: `admin:${req.admin.email}`, titular: { email: req.admin.email }, textoTipo: "termos_reserva", texto: textoTermosReserva(h) });
+  if (h.tipo === "temporada") {
+    const modelo = textoContratoTemporada(h, { reserva: { codigo_motor: "(modelo)", checkin: null, checkout: null }, valor: null, hospedes: [] });
+    await provar(req, { tipo: "publicacao_contrato", referencia: `admin:${req.admin.email}`, titular: { email: req.admin.email }, textoTipo: "contrato_temporada_modelo", texto: modelo });
+  }
+  res.json({ ok: true, pendencias: pendenciasLegais(h) });
+}));
+
+// Pedido do titular (LGPD, art. 18): tudo o que o sistema guarda sobre a pessoa, por e-mail, CPF ou telefone
+admin.get("/titular", rota(async (req, res) => {
+  const q = String(req.query.q ?? "").trim().toLowerCase();
+  const digitos = q.replace(/\D/g, "");
+  if (q.length < 5) return res.status(400).json({ erro: "Informe e-mail, CPF ou telefone." });
+  const bate = (...vals) => vals.some((v) => {
+    const s = String(v ?? "").toLowerCase();
+    return s && (s === q || (digitos.length >= 8 && s.replace(/\D/g, "").endsWith(digitos)));
+  });
+  const [pagamentos, checkins, dados, leadsMeta] = await Promise.all([listarPagamentos(), listarCheckins(), listarDados(), listarLeadsMeta(5000).catch(() => [])]);
+  const pags = pagamentos.filter((p) => bate(p.email, p.telefone));
+  const cks = checkins.filter((c) => (c.hospedes ?? []).some((h) => bate(h.email, h.telefone, h.documento_numero)));
+  const codigos = new Set([...pags.map((p) => p.codigo_reserva), ...cks.map((c) => c.codigo_reserva)].filter(Boolean));
+  const leadIds = new Set(pags.map((p) => p.lead_id));
+  const resultado = {
+    gerado_em: new Date().toISOString(), busca: q, hotel: carregarHotel().nome,
+    reservas: dados.reservas.filter((r) => codigos.has(r.codigo_motor)),
+    pedidos: dados.leads.filter((l) => leadIds.has(l.id)),
+    pagamentos: pags.map(({ pix_copia_cola, ...p }) => p),
+    fichas: cks.map(({ token, senha, senhas_extra, ...c }) => ({ ...c, assinatura: c.assinatura ? { ...c.assinatura, imagem: c.assinatura.imagem ? "(imagem guardada)" : null } : null })),
+    leads_meta: leadsMeta.filter((l) => bate(l.email, l.telefone)),
+    provas: await listarProvas({ referencias: [...codigos, ...leadIds], limite: 500 }).catch(() => []),
+  };
+  await provar(req, { tipo: "direito_titular", referencia: q, titular: { email: q.includes("@") ? q : null }, dados: { pedido: "acesso", por: req.admin.email, encontrados: { reservas: resultado.reservas.length, fichas: resultado.fichas.length, pagamentos: resultado.pagamentos.length } } });
+  res.json(resultado);
 }));
 
 admin.put("/catalogo", rota(async (req, res) => {

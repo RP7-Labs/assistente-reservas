@@ -17,7 +17,7 @@ const sb = usarSupabase
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const ARQUIVO = process.env.LOCAL_DB_FILE || path.join(aqui, "..", "data", "local.json");
-const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta", "visitas", "midia_diaria", "reservas_externas", "importacoes", "configuracoes", "auditoria"];
+const TABELAS = ["leads", "cliques", "reservas", "admins", "pagamentos", "emails", "canais", "bloqueios", "unidades", "checkins", "origens", "conversoes", "leads_meta", "visitas", "midia_diaria", "reservas_externas", "importacoes", "configuracoes", "auditoria", "provas", "textos_legais"];
 const vazio = () => ({ ...Object.fromEntries(TABELAS.map((t) => [t, []])), conversas: {}, atendimentos: {} });
 
 // Sem Supabase, cada hotel tem o próprio arquivo (o hotel padrão usa o arquivo original)
@@ -650,4 +650,62 @@ export async function registrarAuditoria(usuario, acao, detalhe = null) {
 export async function listarAuditoria(limite = 100) {
   if (sb) return verificar(await tab("auditoria").select("*").order("criado_em", { ascending: false }).limit(limite));
   return [...lerArquivo().auditoria].reverse().slice(0, limite);
+}
+
+// ---- Provas legais (db/016): aceites com o texto exato, IP e data. Só inserção; no Supabase, a corrente
+// de hashes é calculada por trigger. Sem Supabase, a mesma corrente é calculada aqui (testes e local).
+
+export async function registrarTextoLegal(tipo, texto) {
+  const hash = crypto.createHash("sha256").update(texto, "utf8").digest("hex");
+  if (sb) {
+    verificar(await sb.from("textos_legais").upsert({ hash, tipo, texto }, { onConflict: "hash", ignoreDuplicates: true }));
+    return hash;
+  }
+  const db = lerArquivo();
+  if (!db.textos_legais.some((t) => t.hash === hash)) { db.textos_legais.push({ hash, tipo, texto, criado_em: new Date().toISOString() }); gravarArquivo(db); }
+  return hash;
+}
+
+export async function buscarTextoLegal(hash) {
+  if (sb) return verificar(await sb.from("textos_legais").select("*").eq("hash", hash).maybeSingle());
+  return lerArquivo().textos_legais.find((t) => t.hash === hash) ?? null;
+}
+
+// Equivalente local de reservas.conteudo_prova() (o banco calcula a própria corrente)
+export function conteudoProva(p) {
+  const ordem = ["agente", "dados", "hotel_id", "ip", "referencia", "texto_hash", "tipo", "titular", "criado_em"];
+  return `${p.hash_anterior ?? ""}|${JSON.stringify(Object.fromEntries(ordem.map((k) => [k, p[k] ?? null])))}`;
+}
+
+export async function registrarProva(prova) {
+  const linha = { tipo: prova.tipo, referencia: prova.referencia ?? null, titular: prova.titular ?? null, texto_hash: prova.texto_hash ?? null, dados: prova.dados ?? null, ip: prova.ip ?? null, agente: prova.agente ?? null };
+  if (sb) return verificar(await tab("provas").insert(linha).select().single());
+  const db = lerArquivo();
+  const anterior = db.provas.at(-1);
+  const p = { id: (anterior?.id ?? 0) + 1, hotel_id: hotelId(), ...linha, criado_em: new Date().toISOString(), hash_anterior: anterior?.hash ?? null };
+  p.hash = crypto.createHash("sha256").update(conteudoProva(p), "utf8").digest("hex");
+  db.provas.push(p);
+  gravarArquivo(db);
+  return p;
+}
+
+export async function listarProvas({ referencias = null, limite = 200 } = {}) {
+  if (sb) {
+    let q = tab("provas").select("*");
+    if (referencias) q = q.in("referencia", referencias);
+    return verificar(await q.order("id", { ascending: false }).limit(limite));
+  }
+  return [...lerArquivo().provas].filter((p) => !referencias || referencias.includes(p.referencia)).reverse().slice(0, limite);
+}
+
+// Confere a corrente: devolve a primeira prova com problema, ou null
+export async function verificarProvas() {
+  if (sb) return verificar(await sb.rpc("verificar_provas", { h: hotelId() }))?.[0] ?? null;
+  let anterior = null;
+  for (const p of lerArquivo().provas) {
+    if ((p.hash_anterior ?? null) !== anterior) return { id: p.id, problema: "corrente quebrada" };
+    if (crypto.createHash("sha256").update(conteudoProva(p), "utf8").digest("hex") !== p.hash) return { id: p.id, problema: "conteúdo alterado" };
+    anterior = p.hash;
+  }
+  return null;
 }

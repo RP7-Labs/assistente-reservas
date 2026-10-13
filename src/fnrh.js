@@ -13,6 +13,8 @@ const URLS = {
 export function configFNRH(env = envDoHotel(), pais = carregarHotel().pais) {
   // A FNRH Digital é do Brasil; hotéis de outros países não enviam ficha
   if (pais && pais !== "BR") return null;
+  // Aluguel por temporada (Lei 8.245/1991) não é meio de hospedagem: não envia FNRH
+  if (carregarHotel().tipo === "temporada") return null;
   const { FNRH_USUARIO: usuario, FNRH_SENHA: senha, FNRH_CPF_SOLICITANTE: cpf } = env;
   if (!usuario || !senha || !cpf) return null;
   const ambiente = env.FNRH_AMBIENTE === "producao" ? "producao" : "homologacao";

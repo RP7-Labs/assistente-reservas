@@ -32,6 +32,11 @@
   .metodos button.ativo { border-color: var(--brand); color: var(--brand); background: var(--brand-50) }
   .erro { margin: 6px 0 }
   .dica { font-size: 13px; color: var(--muted); margin: 10px 0 0 }
+  .termos { background: var(--surface-2, #f6f7f8); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 4px 0 12px }
+  .termos b { display: block; margin-bottom: 4px }
+  label.aceite { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; font-weight: 500 }
+  label.aceite input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; display: inline }
+  footer.empresa { font-size: 12px; color: var(--muted); text-align: center; margin: 24px 0 8px; line-height: 1.5 }
   .testes { background: var(--accent-50); color: var(--warn); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 14px }
   .testes strong { display: block; margin-bottom: 6px }
   .testes .cartao { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 }
@@ -59,6 +64,11 @@
     <label>Nome completo <input name="nome" autocomplete="name" required></label>
     <label>E-mail <input name="email" type="email" autocomplete="email" required></label>
     <label>Celular (opcional) <input name="telefone" type="tel" autocomplete="tel"></label>
+    <div class="termos" id="cancelamento" hidden><b>Política de cancelamento</b><span></span></div>
+    <label class="aceite"><input type="checkbox" name="aceite_termos" required>
+      <span>Li e aceito os <a href="/termos" target="_blank" rel="noopener">termos da reserva</a>, incluindo a política de cancelamento, e a <a href="/privacidade" target="_blank" rel="noopener">política de privacidade</a>.</span></label>
+    <label class="aceite"><input type="checkbox" name="consente_anuncios">
+      <span>Opcional: aceito que meus dados de contato sejam usados para medir e melhorar anúncios (Meta e Google).</span></label>
     <div class="erro" id="erroDados"></div>
     <button>Continuar para o pagamento</button>
     <p class="dica">Se você não concluir o pagamento em 5 minutos, enviamos o link por e-mail para terminar depois.</p>
@@ -125,6 +135,7 @@
     <a class="btn grande" id="irGuia" hidden style="margin-top:8px">Abrir o guia da estadia</a>
     <p class="dica" id="dicaCheckin" hidden>Leva 2 minutos e você recebe a senha da porta, sem passar na recepção. O link também foi para o seu e-mail, junto com o guia da estadia.</p>
   </div>
+  <footer class="empresa" id="empresa"></footer>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <script src="/hotel.js"></script>
@@ -167,6 +178,13 @@ function mostrarSucesso(codigo, detalhe, linkCheckin, linkGuia) {
   $("#sucesso").hidden = false;
 }
 
+function rodape(t) {
+  const e = t?.empresa;
+  if (!e) return;
+  const linha = [e.razao_social || e.nome_fantasia, e.cnpj && `CNPJ ${e.cnpj}`, e.endereco, e.email, e.telefone].filter(Boolean).map(esc).join(" · ");
+  $("#empresa").innerHTML = `${linha}<br><a href="/termos" target="_blank" rel="noopener">Termos da reserva</a> · <a href="/privacidade" target="_blank" rel="noopener">Privacidade</a>`;
+}
+
 const detalheDe = (pg) => pg.metodo === "pix" ? "Pagamento por Pix recebido. Enviamos a confirmação para o seu e-mail."
   : `Valor pré-autorizado no cartão ${pg.cartao_bandeira || ""} final ${pg.cartao_final || ""}. Enviamos a confirmação para o seu e-mail.`;
 
@@ -181,6 +199,8 @@ async function iniciar() {
     // Aviso de teste só no checkout simulado ou no ambiente de testes da Getnet
     $("#avisoTeste").hidden = !(provedor === "simulado" || (provedor === "getnet" && d.ambiente !== "producao"));
     mostrarResumo(pedido);
+    rodape(d.termos);
+    if (d.termos?.cancelamento) { $("#cancelamento span").textContent = d.termos.cancelamento; $("#cancelamento").hidden = false; }
     if (provedor === "indisponivel") {
       const zap = d.whatsapp ? `https://wa.me/${d.whatsapp}?text=${encodeURIComponent(`Olá! Quero concluir minha reserva: ${pedido.quarto}, de ${br(pedido.checkin)} a ${br(pedido.checkout)}.`)}` : null;
       $("#erroGeral").innerHTML = `O pagamento online ainda não está disponível.${zap ? ` <a href="${zap}" target="_blank" rel="noopener">Fale com o hotel pelo WhatsApp</a> para concluir a reserva.` : " Fale com o hotel para concluir a reserva."}`;
@@ -193,13 +213,15 @@ async function iniciar() {
     const f = $("#passoDados");
     if (pg?.email) { f.nome.value = pg.nome || ""; f.email.value = pg.email; $("#formCartao").nome.value = (pg.nome || "").toUpperCase(); }
     f.hidden = false;
-    if (pg?.email) $("#passoPagar").hidden = false;
+    if (pg?.email && d.termos?.aceito) { $("#passoPagar").hidden = false; f.aceite_termos.checked = true; }
   } catch (err) { $("#erroGeral").textContent = err.message; }
 }
 
 $("#passoDados").addEventListener("submit", async (e) => {
   e.preventDefault();
   const dados = Object.fromEntries(new FormData(e.target));
+  dados.aceite_termos = e.target.aceite_termos.checked;
+  dados.consente_anuncios = e.target.consente_anuncios.checked;
   $("#erroDados").textContent = "";
   try {
     await api("/dados", dados);

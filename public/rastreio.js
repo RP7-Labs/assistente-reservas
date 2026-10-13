@@ -54,7 +54,7 @@
     const b = document.createElement("div");
     b.setAttribute("role", "dialog");
     b.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:50;max-width:520px;margin:0 auto;background:var(--surface,#fff);color:var(--ink,#111);border:1px solid var(--border,#ddd);border-radius:14px;padding:12px 14px;box-shadow:0 12px 32px -8px rgba(0,0,0,.25);font:14px/1.4 var(--font,system-ui);display:flex;gap:10px;align-items:center;flex-wrap:wrap";
-    b.innerHTML = `<span style="flex:1;min-width:200px">Usamos cookies para medir de onde vêm as reservas e melhorar nossos anúncios.</span>
+    b.innerHTML = `<span style="flex:1;min-width:200px">Usamos cookies para medir de onde vêm as reservas e melhorar nossos anúncios. <a href="/privacidade" target="_blank" rel="noopener">Saiba mais</a>.</span>
       <button type="button" data-c="nao" class="btn">Recusar</button><button type="button" data-c="sim" class="btn prim">Aceitar</button>`;
     b.onclick = (e) => {
       const c = e.target.closest("[data-c]")?.dataset.c;

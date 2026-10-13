@@ -132,6 +132,7 @@
       <button type="button" onclick="location.href='/resultados'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/></svg><span class="txt">Resultados</span></button>
       <button data-aba="checkin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span class="txt">Check-in</span><span class="badge" id="badgeCheckin" hidden></span></button>
       <button data-aba="canais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 21v-5h5"/></svg><span class="txt">Canais</span><span class="badge" id="badgeCanais" hidden></span></button>
+      <button data-aba="legal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="txt">Legal</span><span class="badge" id="badgeLegal" hidden></span></button>
       <button data-aba="usuarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span class="txt">Usuários</span><span class="badge" id="badgeUsu" hidden></span></button>
       <button data-aba="hoteis" id="abaHoteis" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></svg><span class="txt">Hotéis</span></button>
     </nav>
@@ -311,6 +312,45 @@
       <p style="margin:10px 0 0">Daqui para o Airbnb: quando o tipo de quarto lota, as noites fecham no anúncio. Do Airbnb para cá: reservas e bloqueios do anúncio ocupam uma unidade e saem da venda no chat. Lemos o Airbnb a cada <span id="minSync">10</span> minutos e antes de cada pagamento; o Airbnb lê o nosso calendário no ritmo dele (pode levar algumas horas), então ainda existe uma janela pequena de reserva dupla.</p>
     </details>
   </section>
+  <section data-sec="legal" hidden>
+    <div id="legalPend"></div>
+    <form id="formLegal" class="card" style="padding:16px;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-items:end;margin-bottom:16px">
+      <label style="display:grid;gap:6px">Tipo de negócio<select name="tipo"><option value="hotel">Hotel (com FNRH)</option><option value="temporada">Aluguel por temporada</option></select></label>
+      <label style="display:grid;gap:6px">Razão social<input name="razao_social"></label>
+      <label style="display:grid;gap:6px">CNPJ (ou CPF)<input name="cnpj" inputmode="numeric"></label>
+      <label style="display:grid;gap:6px">Endereço<input name="endereco"></label>
+      <label style="display:grid;gap:6px">E-mail de contato<input name="email" type="email"></label>
+      <label style="display:grid;gap:6px">Telefone<input name="telefone"></label>
+      <label style="display:grid;gap:6px">Encarregado de dados (nome)<input name="enc_nome"></label>
+      <label style="display:grid;gap:6px">E-mail para pedidos sobre dados<input name="enc_email" type="email"></label>
+      <label style="display:grid;gap:6px;grid-column:1/-1">Política de cancelamento e reembolso (aparece antes do pagamento e entra nos termos)<textarea name="cancelamento" rows="3" placeholder="Ex.: Cancelamento grátis até 7 dias antes da entrada. Entre 7 dias e 48 horas, reembolso de 50%. Depois disso ou não comparecimento, sem reembolso."></textarea></label>
+      <fieldset id="campoTemporada" hidden style="grid-column:1/-1;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));border:1px solid var(--border);border-radius:12px;padding:12px">
+        <legend class="mut">Contrato de locação por temporada (Lei 8.245/1991)</legend>
+        <label style="display:grid;gap:6px">Locador (nome)<input name="loc_nome"></label>
+        <label style="display:grid;gap:6px">Locador (CPF/CNPJ)<input name="loc_doc" inputmode="numeric"></label>
+        <label style="display:grid;gap:6px">Endereço do locador<input name="loc_end"></label>
+        <label style="display:grid;gap:6px">Endereço do imóvel<input name="imovel_end"></label>
+        <label style="display:grid;gap:6px">Máximo de ocupantes<input name="max_ocupantes" type="number" min="1" max="50"></label>
+        <label style="display:grid;gap:6px">Caução (opcional)<input name="caucao" placeholder="Ex.: R$ 500 por Pix, devolvida em 3 dias"></label>
+        <label style="display:grid;gap:6px;grid-column:1/-1">Descrição do imóvel<textarea name="imovel_desc" rows="2"></textarea></label>
+        <label style="display:grid;gap:6px;grid-column:1/-1">Regras da casa<textarea name="regras" rows="3" placeholder="Silêncio das 22h às 8h; sem festas; pets só com aviso..."></textarea></label>
+        <label style="display:grid;gap:6px;grid-column:1/-1">Móveis e utensílios, um por linha: item; quantidade; estado<textarea name="inventario" rows="6" placeholder="Sofá de 3 lugares; 1; bom&#10;Jogo de pratos; 12; novo&#10;Smart TV 50''; 1; bom"></textarea></label>
+      </fieldset>
+      <div style="grid-column:1/-1;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn prim">Salvar dados legais</button><span class="erro" id="legalErro"></span><span class="mut" id="legalOk"></span>
+        <span class="mut" id="legalVersoes"></span></div>
+    </form>
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <h3 style="margin:0 0 8px">Pedido de um titular (LGPD, art. 18)</h3>
+      <form id="formTitular" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end"><label style="display:grid;gap:6px;flex:1;min-width:220px">E-mail, CPF ou telefone<input name="q" required></label><button class="btn">Baixar dados da pessoa</button><span class="erro" id="titularErro"></span></form>
+      <p class="mut" style="margin:8px 0 0">Gera um arquivo com tudo o que o sistema guarda sobre a pessoa. O pedido fica registrado nas provas. Responda ao titular em até 15 dias.</p>
+    </div>
+    <h3 style="margin:0 0 8px">Provas registradas <span class="mut" id="legalCorrente"></span></h3>
+    <div class="tabela"><table>
+      <thead><tr><th>#</th><th>Quando</th><th>Tipo</th><th>Referência</th><th>Quem</th><th>IP</th><th>Código</th></tr></thead>
+      <tbody id="tbProvas"></tbody>
+    </table></div>
+  </section>
+
   <section data-sec="usuarios" hidden>
     <div class="tabela"><table>
       <thead><tr><th>Status</th><th>Nome</th><th>E-mail</th><th>Desde</th><th>Aprovado por</th><th></th></tr></thead>
@@ -486,7 +526,7 @@ async function carregar() {
   nomes = Object.fromEntries(painel.quartos.map((q) => [q.id, q.nome]));
   $("#atualizado").textContent = "Atualizado " + new Date().toLocaleTimeString("pt-BR");
   desenharGeral(); desenharAtend(); desenharLoc();
-  await Promise.all([carregarQuartos(), carregarCatalogo(), carregarIntegracoes(), carregarUsuarios(), carregarPagamentos(), carregarCanais(), carregarCheckin(), carregarCampanhas()]);
+  await Promise.all([carregarLegal().catch((err) => console.error(err)), carregarQuartos(), carregarCatalogo(), carregarIntegracoes(), carregarUsuarios(), carregarPagamentos(), carregarCanais(), carregarCheckin(), carregarCampanhas()]);
 }
 
 async function carregarUsuarios() {
@@ -672,7 +712,7 @@ function verFicha(codigo) {
   $("#dfTitulo").textContent = `Ficha · ${codigo}`;
   const nomeP = (c) => n.paises[c] || c;
   $("#dfCorpo").innerHTML = r.hospedes.map((h, i) => `<div class="card" style="padding:14px;margin-bottom:10px">
-    <strong>${esc(h.nome)}</strong> <span class="mut">${i === 0 ? "· titular" : h.menor ? "· menor de idade" : ""}</span>
+    <strong>${esc(h.nome)}</strong> <span class="mut">${i === 0 ? "· titular" : h.menor ? `· menor de idade${h.vinculo ? ` · ${esc({ PAIS: "com pai ou mãe", RESPONSAVEL_LEGAL: "com responsável legal", AUTORIZADO: "com outro adulto: pedir a autorização dos pais na chegada" }[h.vinculo] ?? h.vinculo)}` : ""}` : ""}</span>
     <div class="mut" style="margin-top:4px">Nascimento ${dataBR(h.nascimento)} · ${esc(nomeP(h.nacionalidade))} · ${esc(DOC[h.documento_tipo] || h.documento_tipo)} ${esc(h.documento_numero)}</div>
     <div class="mut">${esc(n.generos[h.genero] || h.genero)} · ${esc(n.racas[h.raca] || h.raca)} · Deficiência: ${esc(n.deficiencias[h.deficiencia] || h.deficiencia)}${h.tipo_deficiencia ? ` (${esc(n.tipos_deficiencia[h.tipo_deficiencia])})` : ""}</div>
     ${i === 0 ? `<div class="mut">${esc(h.email)} · ${esc(h.telefone)} · ${esc(h.cidade || "")}${h.uf ? `/${esc(h.uf)}` : ""}, ${esc(nomeP(h.pais_residencia))}</div>
@@ -871,6 +911,51 @@ $("#formCatalogo").onsubmit = async (e) => {
     await api("/catalogo", { method: "PUT", body: JSON.stringify({ quartos, politicas: e.target.politicas.value, link_motor: e.target.link_motor.value }) });
     $("#catOk").textContent = "Catálogo salvo."; await Promise.all([carregarCatalogo(), carregarQuartos()]);
   } catch (err) { $("#catErro").textContent = err.message; }
+};
+
+const TIPOS_PROVA = { aceite_reserva: "Aceite dos termos (pagamento)", ficha_hospedes: "Ficha e assinatura (check-in)", contrato_temporada: "Contrato de temporada", direito_titular: "Pedido de titular", publicacao_termos: "Termos publicados", publicacao_contrato: "Modelo de contrato publicado" };
+async function carregarLegal() {
+  const l = await api("/legal");
+  const f = $("#formLegal"), e = l.empresa, t = l.temporada ?? {};
+  f.tipo.value = l.tipo; f.razao_social.value = e.razao_social ?? ""; f.cnpj.value = e.cnpj ?? ""; f.endereco.value = e.endereco ?? "";
+  f.email.value = e.email ?? ""; f.telefone.value = e.telefone ?? ""; f.enc_nome.value = e.encarregado?.nome ?? ""; f.enc_email.value = e.encarregado?.email ?? "";
+  f.cancelamento.value = l.cancelamento ?? "";
+  f.loc_nome.value = t.locador?.nome ?? ""; f.loc_doc.value = t.locador?.documento ?? ""; f.loc_end.value = t.locador?.endereco ?? "";
+  f.imovel_end.value = t.imovel?.endereco ?? ""; f.imovel_desc.value = t.imovel?.descricao ?? ""; f.max_ocupantes.value = t.max_ocupantes ?? "";
+  f.caucao.value = t.caucao ?? ""; f.regras.value = t.regras ?? "";
+  f.inventario.value = (t.inventario ?? []).map((i) => `${i.item}; ${i.quantidade}; ${i.estado}`).join("\n");
+  $("#campoTemporada").hidden = l.tipo !== "temporada";
+  const bloqueia = l.pendencias.filter((p) => p.bloqueia);
+  $("#badgeLegal").hidden = !l.pendencias.length; $("#badgeLegal").textContent = l.pendencias.length;
+  $("#legalPend").innerHTML = l.pendencias.length
+    ? `<p class="aviso">${bloqueia.length && !l.simulacao ? "<strong>A venda online está desligada até completar os itens marcados.</strong> " : ""}Faltam:</p><ul>${l.pendencias.map((p) => `<li>${p.bloqueia ? "<strong>" : ""}${esc(p.texto)}${p.bloqueia ? "</strong>" : ""}</li>`).join("")}</ul>`
+    : `<p class="aviso">Dados legais completos.</p>`;
+  $("#legalVersoes").innerHTML = `<a href="/privacidade" target="_blank" rel="noopener">Privacidade</a> v${esc(l.versoes.privacidade)} · <a href="/termos" target="_blank" rel="noopener">Termos</a> v${esc(l.versoes.termos)}`;
+  $("#legalCorrente").textContent = l.corrente.erro ? "(registro de provas indisponível)" : l.corrente.ok ? "· integridade conferida" : `· ATENÇÃO: prova ${l.corrente.id} com ${l.corrente.problema}`;
+  $("#tbProvas").innerHTML = (l.provas ?? []).map((p) => `<tr><td>${p.id}</td><td>${esc(new Date(p.criado_em).toLocaleString("pt-BR"))}</td><td>${esc(TIPOS_PROVA[p.tipo] ?? p.tipo)}</td><td class="mono">${esc(p.referencia ?? "")}</td><td>${esc(p.titular ?? "")}</td><td class="mono">${esc(p.ip ?? "")}</td><td class="mono" title="${esc(p.hash)}">${esc(String(p.hash ?? "").slice(0, 10))}</td></tr>`).join("") || `<tr><td colspan="7" class="mut">Nenhuma prova ainda.</td></tr>`;
+}
+$("#formLegal").tipo.onchange = (e) => ($("#campoTemporada").hidden = e.target.value !== "temporada");
+$("#formLegal").onsubmit = async (e) => {
+  e.preventDefault(); $("#legalErro").textContent = ""; $("#legalOk").textContent = "";
+  const f = e.target;
+  const corpo = {
+    tipo: f.tipo.value, cancelamento: f.cancelamento.value,
+    empresa: { razao_social: f.razao_social.value, cnpj: f.cnpj.value, endereco: f.endereco.value, email: f.email.value, telefone: f.telefone.value, encarregado: { nome: f.enc_nome.value, email: f.enc_email.value } },
+    temporada: { locador: { nome: f.loc_nome.value, documento: f.loc_doc.value, endereco: f.loc_end.value }, imovel: { endereco: f.imovel_end.value, descricao: f.imovel_desc.value },
+      max_ocupantes: f.max_ocupantes.value, caucao: f.caucao.value, regras: f.regras.value, inventario: f.inventario.value },
+  };
+  try { await api("/legal", { method: "PUT", body: JSON.stringify(corpo) }); $("#legalOk").textContent = "Salvo."; await carregarLegal(); }
+  catch (err) { $("#legalErro").textContent = err.message; }
+};
+$("#formTitular").onsubmit = async (e) => {
+  e.preventDefault(); $("#titularErro").textContent = "";
+  try {
+    const r = await api(`/titular?q=${encodeURIComponent(e.target.q.value.trim())}`);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: "application/json" }));
+    a.download = `dados-titular-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    await carregarLegal();
+  } catch (err) { $("#titularErro").textContent = err.message; }
 };
 
 const INTEGR = [["pagamento", "getnet", "Pagamento (Getnet)"], ["fechaduras", "fechaduras", "Fechaduras (TTLock/TTHotel)"], ["whatsapp", "whatsapp", "WhatsApp (Meta Cloud API)"], ["email", "email", "E-mail (Resend)"], ["fnrh", "fnrh", "FNRH Digital"]];

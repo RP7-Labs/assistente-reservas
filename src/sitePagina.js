@@ -257,8 +257,9 @@ ${d.faq.length ? `<section id="duvidas" style="padding-top:0"><div class="wrap">
     ${c.whatsapp ? `<p><a href="#" data-zap>WhatsApp ${esc(telBR(c.whatsapp))}</a></p>` : ""}
     ${c.telefone ? `<p><a href="tel:+${esc(tel(c.telefone))}">Telefone ${esc(telBR(c.telefone))}</a></p>` : ""}
     ${c.email ? `<p><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></p>` : ""}</div>
-  <div><h3>Siga</h3>${c.instagram ? `<p><a href="https://instagram.com/${esc(c.instagram)}" target="_blank" rel="noopener">Instagram @${esc(c.instagram)}</a></p>` : ""}</div>
-</div></footer>
+  <div><h3>Siga</h3>${c.instagram ? `<p><a href="https://instagram.com/${esc(c.instagram)}" target="_blank" rel="noopener">Instagram @${esc(c.instagram)}</a></p>` : ""}
+    <p><a href="/privacidade">Política de privacidade</a></p><p><a href="/termos">Termos da reserva</a></p></div>
+</div>${d.empresa?.razao_social ? `<div class="wrap" style="margin-top:20px;font-size:13px;opacity:.8">${esc(d.empresa.razao_social)}${d.empresa.cnpj ? ` · CNPJ ${esc(d.empresa.cnpj)}` : ""}${d.empresa.endereco ? ` · ${esc(d.empresa.endereco)}` : ""}</div>` : ""}</footer>
 
 <div class="flutua">
   ${c.whatsapp ? `<button class="b-zap" type="button" data-zap aria-label="Falar no WhatsApp">${ic("zap")}</button>` : ""}

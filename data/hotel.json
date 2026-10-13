@@ -4,6 +4,20 @@
   "checkin": "14:00",
   "checkout": "11:00",
   "politicas": "Check-in a partir das 14h e check-out até as 11h. Não aceitamos pets. Café da manhã em buffet. As condições de cancelamento dependem da tarifa escolhida.",
+  "tipo": "hotel",
+  "_legal": "Razão social, CNPJ e política de cancelamento faltam: sem eles a venda online fica desligada em produção. Preencher no admin, aba Legal.",
+  "empresa": {
+    "razao_social": null,
+    "cnpj": null,
+    "endereco": "Rua 3100, 780, Centro, Balneário Camboriú - SC, 88330-475",
+    "email": "reservas@rezendesuites.com.br",
+    "telefone": "+55 47 3361-9815",
+    "encarregado": {
+      "nome": null,
+      "email": "reservas@rezendesuites.com.br"
+    }
+  },
+  "cancelamento": null,
   "motor": {
     "_comentario": "Link do motor de reservas (HBook/HSystem) com {codigo_motor}, {checkin}, {checkout} (AAAA-MM-DD), {adultos}, {criancas}. Vazio = usa o checkout próprio. Preencher com o formato real do HBook do Rezende.",
     "link_modelo": ""

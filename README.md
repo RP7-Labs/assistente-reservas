@@ -230,3 +230,17 @@ Na Vercel em produção nada é simulado: integração sem chave fica desligada.
 - **Onde fica.** Tipos de quarto, unidades, diária, preço mensal, políticas e link do motor ficam no cadastro do hotel (tabela `hoteis`, campo `config`), que sobrepõe `data/hotel.json`. Toda alteração vai para a auditoria.
 - **Sem diária.** O quarto aparece como "preço sob consulta"; o assistente não gera link de pagamento e chama a equipe.
 - **Testes.** Os testes automatizados usam o catálogo fictício `test/fixtures/hotel-teste.json` (`HOTEL_FILE` no `npm test`), nunca o do hotel.
+
+## Conformidade legal (admin > Legal)
+
+- Rode `db/016_provas_legais.sql` no Supabase.
+- **Provas:** cada aceite vira um registro que não pode ser alterado nem apagado (trigger), com o texto exato que a pessoa viu (`textos_legais`), IP, navegador, data e o hash do registro anterior. `reservas.verificar_provas('<hotel>')` confere a corrente; o admin mostra o resultado.
+  - `aceite_reserva`: termos e política de cancelamento aceitos na página de pagamento, com o resumo do pedido e o consentimento para anúncios.
+  - `ficha_hospedes`: declaração e consentimento do check-in, ligados à ficha e à assinatura; inclui o vínculo de cada menor (ECA, art. 82).
+  - `contrato_temporada`: contrato de locação por temporada com os ocupantes (só em imóveis do tipo temporada).
+  - `publicacao_termos` / `publicacao_contrato`: o que o admin publicou, e quem.
+  - `direito_titular`: pedidos de acesso do titular (LGPD, art. 18).
+- **Venda online:** em produção, o pagamento fica desligado até cadastrar razão social, CNPJ, endereço e política de cancelamento (e, em temporada, locador, imóvel e inventário).
+- **Anúncios:** dados pessoais só vão para a Meta (API de Conversões) com o consentimento marcado na página de pagamento.
+- **Páginas:** `/privacidade` e `/termos` são montadas a partir do cadastro. A confirmação da reserva leva uma cópia dos termos.
+- **Aluguel por temporada** (`tipo: "temporada"`): sem FNRH, sem gênero/raça/deficiência na ficha, até 90 dias por reserva (Lei 8.245/1991, art. 48), contrato com inventário assinado no check-in.

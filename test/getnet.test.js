@@ -64,7 +64,14 @@ test("Pix real: gera pela Getnet, confirma pela notificação e ignora notifica�
   const base = `http://127.0.0.1:${srv.address().port}/api/pagamento`;
   const post = (p, b = {}) => fetch(`${base}/${lead.id}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
   try {
-    assert.equal((await post("/dados", { nome: "Ana Souza", email: "ana@exemplo.com" })).status, 200);
+    // Sem aceitar os termos não segue (CDC; Decreto 7.962/2013)
+    assert.equal((await post("/dados", { nome: "Ana Souza", email: "ana@exemplo.com" })).status, 400);
+    assert.equal((await post("/pix")).status, 400);
+    assert.equal((await post("/dados", { nome: "Ana Souza", email: "ana@exemplo.com", aceite_termos: true })).status, 200);
+    const [aceite] = await store.listarProvas({ referencias: [lead.id] });
+    assert.equal(aceite.tipo, "aceite_reserva");
+    assert.equal(aceite.dados.consente_anuncios, false);
+    assert.equal(aceite.dados.pedido.checkin, "2099-03-10");
     // Com a Getnet ligada o número do cartão não pode chegar ao servidor
     assert.equal((await post("/cartao", { numero: "4111111111111111", validade: "12/30", cvv: "123", nome: "A" })).status, 400);
     assert.equal((await post("/pix/simular")).status, 404);
@@ -112,7 +119,7 @@ test("cartão real: iframe sem segredo, pré-autorização pela notificação e 
   const base = `http://127.0.0.1:${srv.address().port}/api/pagamento`;
   const post = (p, b = {}) => fetch(`${base}/${lead.id}${p}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
   try {
-    await post("/dados", { nome: "Bruno Lima Costa", email: "bruno@exemplo.com", telefone: "34999990000" });
+    await post("/dados", { nome: "Bruno Lima Costa", email: "bruno@exemplo.com", telefone: "34999990000", aceite_termos: true, consente_anuncios: true });
     const cfg = await (await post("/cartao/getnet")).json();
     assert.equal(cfg.loader, "https://checkout-homologacao.getnet.com.br/loader.js");
     const a = cfg.atributos;
