@@ -27,22 +27,40 @@ test("em produção a simulação fica desligada, a menos que SIMULACAO=1", () =
   delete process.env.SIMULACAO;
 });
 
-test("catálogo real: sem preço cadastrado não gera link e chama a equipe", () => {
+test("catálogo real: tabela do Joel por pessoa e por temporada; sem tabela, chama a equipe", () => {
   const hotel = carregarHotel();
   assert.deepEqual(hotel.quartos.map((q) => q.id), ["estudio", "suite"]);
   assert.equal(hotel.quartos.reduce((t, q) => t + q.unidades, 0), 29);
   const suite = hotel.quartos.find((q) => q.id === "suite");
-  assert.equal(temPreco(suite), false);
-  const v = validarPedido(hotel, { quarto_id: "suite", checkin: "2026-11-10", checkout: "2026-11-12", adultos: 2 }, new Date("2026-10-12T12:00:00Z"));
-  assert.equal(v.ok, false);
-  assert.equal(v.sem_preco, true);
+  // Baixa: R$ 99 por pessoa → casal, 2 noites = 396
+  const baixa = validarPedido(hotel, { quarto_id: "suite", checkin: "2026-11-10", checkout: "2026-11-12", adultos: 2 }, new Date("2026-10-12T12:00:00Z"));
+  assert.equal(baixa.total, 396);
+  // Réveillon (500) e Carnaval 2027 (6 a 9/02, 299) por pessoa
+  assert.equal(validarPedido(hotel, { quarto_id: "suite", checkin: "2026-12-30", checkout: "2027-01-02", adultos: 2 }, new Date("2026-10-12T12:00:00Z")).total, 3000);
+  assert.equal(validarPedido(hotel, { quarto_id: "suite", checkin: "2027-02-05", checkout: "2027-02-07", adultos: 2 }, new Date("2026-10-12T12:00:00Z")).total, 169 * 2 + 299 * 2);
   const r = responderPorRegras(hotel, ["quero a suíte de 10/11 a 12/11 para 2 adultos"], "2026-10-12");
-  assert.equal(r.acao?.tipo, "atendente");
-  assert.doesNotMatch(r.texto, /R\$/);
+  assert.match(r.texto, /R\$ 396/);
   const lista = responderPorRegras(hotel, ["Ver quartos e preços"], "2026-10-12");
-  assert.doesNotMatch(lista.texto, /R\$ (null|0|NaN)/);
-  // Com o preço cadastrado, volta a gerar link
+  assert.match(lista.texto, /a partir de R\$ 99 por pessoa/i);
+  // Sem tabela e sem diária: não gera link e chama a equipe, sem inventar valor
+  const semTabela = { ...hotel, tarifas: null };
+  assert.equal(temPreco(suite, 2, semTabela), false);
+  assert.equal(validarPedido(semTabela, { quarto_id: "suite", checkin: "2026-11-10", checkout: "2026-11-12", adultos: 2 }, new Date("2026-10-12T12:00:00Z")).sem_preco, true);
+  const sr = responderPorRegras(semTabela, ["quero a suíte de 10/11 a 12/11 para 2 adultos"], "2026-10-12");
+  assert.equal(sr.acao?.tipo, "atendente");
+  assert.doesNotMatch(sr.texto, /R\$/);
   assert.equal(temPreco({ ...suite, preco_a_partir: 200 }), true);
+});
+
+test("tarifas: texto do admin ida e volta", async () => {
+  const { lerTarifas, tarifasParaTexto } = await import("../src/catalogo.js");
+  const hotel = carregarHotel();
+  const volta = lerTarifas(tarifasParaTexto(hotel.tarifas), true).tarifas;
+  assert.deepEqual(volta.faixas, hotel.tarifas.faixas);
+  assert.equal(volta.padrao, 99);
+  assert.deepEqual(volta.eventos.map((e) => e.nome), ["Réveillon", "Carnaval"]);
+  assert.match(lerTarifas("Natal 24/12 a 25/12: 1.200,50", false).tarifas.eventos[0].valor.toString(), /^1200\.5$/);
+  assert.match(lerTarifas("dezembro: 100", true).erro, /linha 1/);
 });
 
 test("check-in sem fechadura em produção não inventa senha", async () => {

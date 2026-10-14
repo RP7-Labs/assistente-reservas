@@ -211,10 +211,12 @@
     <p class="mut" style="margin:0 0 10px">É o que o assistente oferece e cobra. Quarto sem diária fica "sob consulta": o assistente não gera link e chama a equipe. Toda alteração fica registrada na auditoria.</p>
     <form id="formCatalogo">
       <div class="tabela"><table class="catalogo">
-        <thead><tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Adultos</th><th>Pessoas</th><th>Unidades</th><th>Diária a partir de (R$)</th><th>Mensal (R$)</th><th>Mín. noites mensal</th><th>Código no motor</th><th></th></tr></thead>
+        <thead><tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Adultos</th><th>Pessoas</th><th>Unidades</th><th>Diária fixa (R$)</th><th>Mensal (R$)</th><th>Mín. noites mensal</th><th>Código no motor</th><th></th></tr></thead>
         <tbody id="tbCatalogo"></tbody>
       </table></div>
       <div style="display:flex;gap:8px;margin:10px 0"><button type="button" class="btn" id="maisQuarto">+ Tipo de quarto</button></div>
+      <label class="mut" style="display:block;margin-top:8px">Diárias por temporada (valem para todos os quartos e substituem a diária fixa). Uma regra por linha: "01/12 a 10/12: 115", "Réveillon 29/12 a 01/01: 500", "Carnaval: 299", "Demais datas: 99"<textarea name="tarifas" rows="7" style="width:100%;font-family:var(--mono,monospace)"></textarea></label>
+      <label class="mut" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" name="tarifa_por_pessoa"> Valores por pessoa (o total multiplica pelo número de hóspedes)</label>
       <label class="mut" style="display:block;margin-top:8px">Políticas (mostradas aos hóspedes)<textarea name="politicas" rows="2" style="width:100%"></textarea></label>
       <label class="mut" style="display:block;margin-top:8px">Link do motor de reservas (opcional; use {codigo_motor}, {checkin}, {checkout}, {adultos}, {criancas})<input name="link_motor" style="width:100%" placeholder="https://..."></label>
       <div style="display:flex;gap:8px;align-items:center;margin-top:12px"><button class="btn prim">Salvar catálogo</button><span class="erro" id="catErro"></span><span class="mut" id="catOk"></span></div>
@@ -900,7 +902,7 @@ const linhaCatalogo = (q = {}) => `<tr>
 async function carregarCatalogo() {
   const c = await api("/catalogo");
   $("#tbCatalogo").innerHTML = c.quartos.map(linhaCatalogo).join("");
-  const f = $("#formCatalogo"); f.politicas.value = c.politicas; f.link_motor.value = c.link_motor;
+  const f = $("#formCatalogo"); f.politicas.value = c.politicas; f.link_motor.value = c.link_motor; f.tarifas.value = c.tarifas ?? ""; f.tarifa_por_pessoa.checked = Boolean(c.tarifa_por_pessoa);
 }
 $("#maisQuarto").onclick = () => $("#tbCatalogo").insertAdjacentHTML("beforeend", linhaCatalogo());
 $("#tbCatalogo").onclick = (e) => { if (e.target.closest("[data-rmquarto]") && confirm("Remover este tipo de quarto do catálogo?")) e.target.closest("tr").remove(); };
@@ -908,7 +910,7 @@ $("#formCatalogo").onsubmit = async (e) => {
   e.preventDefault(); $("#catErro").textContent = ""; $("#catOk").textContent = "";
   const quartos = [...$("#tbCatalogo").querySelectorAll("tr")].map((tr) => Object.fromEntries([...tr.querySelectorAll("[data-c]")].map((i) => [i.dataset.c, i.value.trim() === "" ? null : i.value.trim()])));
   try {
-    await api("/catalogo", { method: "PUT", body: JSON.stringify({ quartos, politicas: e.target.politicas.value, link_motor: e.target.link_motor.value }) });
+    await api("/catalogo", { method: "PUT", body: JSON.stringify({ quartos, politicas: e.target.politicas.value, link_motor: e.target.link_motor.value, tarifas: e.target.tarifas.value, tarifa_por_pessoa: e.target.tarifa_por_pessoa.checked }) });
     $("#catOk").textContent = "Catálogo salvo."; await Promise.all([carregarCatalogo(), carregarQuartos()]);
   } catch (err) { $("#catErro").textContent = err.message; }
 };

@@ -1,4 +1,5 @@
 // Regras do back-office, sem acesso a banco (fáceis de testar).
+import { aPartirDe } from "./catalogo.js";
 
 const ATIVAS = new Set(["confirmada", "concluida"]);
 
@@ -79,7 +80,7 @@ export function disponibilidade(hotel, reservas, leads, data, bloqueios = []) {
       externas,
       livres: Math.max(unidades - ocupadas, 0),
       em_processo: emProcesso,
-      preco_a_partir: q.preco_a_partir,
+      preco_a_partir: aPartirDe(q, hotel)?.valor ?? null,
       capacidade: `${q.capacidade_adultos} adultos / ${q.capacidade_total} pessoas`,
     };
   });

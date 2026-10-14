@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { carregarHotel, validarPedido, montarLinkMotor, precoTotal } from "./catalogo.js";
+import { carregarHotel, validarPedido, montarLinkMotor } from "./catalogo.js";
 import { criarLead, carregarConversa, salvarConversa, marcarAtendente } from "./store.js";
 import { responderPorRegras, hojeSP } from "./regras.js";
 import { configLLM, responderComLLM } from "./llm.js";
@@ -73,7 +73,7 @@ async function executarFerramenta(nome, entrada, ctx) {
     // Link curto que passa pelo nosso servidor para contar o clique
     const link = ctx.publicUrl ? `${ctx.publicUrl}/r/${lead.id}` : linkMotor;
     ctx.eventos.push({ tipo: "link", lead_id: lead.id, quarto: v.quarto.nome, link });
-    return { conteudo: JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, preco_a_partir_por_noite: v.quarto.preco_a_partir, total_a_partir: precoTotal(v.quarto, v.noites) }) };
+    return { conteudo: JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, total: v.total }) };
   }
   if (nome === "chamar_atendente") {
     ctx.eventos.push({ tipo: "atendente", motivo: entrada.motivo });

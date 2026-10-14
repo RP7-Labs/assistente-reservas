@@ -2,7 +2,7 @@
 // (src/getnet.js); sem elas, tudo é simulado e nada é cobrado.
 import crypto from "node:crypto";
 import express from "express";
-import { carregarHotel, precoTotal, noHotel } from "./catalogo.js";
+import { carregarHotel, detalharPreco, noHotel } from "./catalogo.js";
 import { HOTEL_PADRAO } from "./tenant.js";
 import { dinheiro } from "./paises.js";
 import { localizarHotel, buscarLead, buscarPagamento, salvarPagamento, salvarReserva, listarDados, pagamentosSemLembrete } from "./store.js";
@@ -70,10 +70,12 @@ const noitesDe = (l) => Math.round((Date.parse(l.checkout) - Date.parse(l.checki
 export function resumoPedido(hotel, lead) {
   const quarto = hotel.quartos.find((q) => q.id === lead.quarto_id);
   const noites = noitesDe(lead);
+  const p = detalharPreco(quarto, noites, { hotel, checkin: lead.checkin, adultos: lead.adultos ?? 1, criancas: lead.criancas ?? 0 });
   return {
     lead_id: lead.id, hotel: hotel.nome, moeda: hotel.moeda ?? "BRL", idioma: hotel.idioma ?? "pt-BR", quarto: quarto?.nome ?? lead.quarto_id, quarto_id: lead.quarto_id,
     checkin: lead.checkin, checkout: lead.checkout, noites, adultos: lead.adultos, criancas: lead.criancas,
-    diaria: quarto?.preco_a_partir ?? 0, total: precoTotal(quarto, noites), mensal: Boolean(quarto?.preco_mensal && precoTotal(quarto, noites) !== (quarto?.preco_a_partir ?? 0) * noites),
+    diaria: noites ? Math.round((p.total / noites) * 100) / 100 : 0, total: p.total, mensal: Boolean(p.mensal),
+    variavel: new Set(p.noites.map((n) => n.valor)).size > 1, por_pessoa: Boolean(p.por_pessoa),
   };
 }
 

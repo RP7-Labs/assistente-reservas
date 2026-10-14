@@ -18,6 +18,56 @@
     }
   },
   "cancelamento": null,
+  "tarifas": {
+    "_fonte": "Tabela do Joel (WhatsApp, 12/10/2026), valores aproximados por pessoa, temporada 2025/26 repetida todo ano. 27 e 28/12 não estavam na tabela: usam a faixa anterior (149). Carnaval calculado pela Páscoa (noites de sábado a terça).",
+    "por_pessoa": true,
+    "padrao": 99,
+    "faixas": [
+      {
+        "de": "12-01",
+        "ate": "12-10",
+        "valor": 115
+      },
+      {
+        "de": "12-11",
+        "ate": "12-28",
+        "valor": 149
+      },
+      {
+        "de": "01-02",
+        "ate": "01-20",
+        "valor": 225
+      },
+      {
+        "de": "01-21",
+        "ate": "01-31",
+        "valor": 200
+      },
+      {
+        "de": "02-01",
+        "ate": "02-29",
+        "valor": 169
+      },
+      {
+        "de": "03-01",
+        "ate": "03-31",
+        "valor": 129
+      }
+    ],
+    "eventos": [
+      {
+        "nome": "Réveillon",
+        "de": "12-29",
+        "ate": "01-01",
+        "valor": 500
+      },
+      {
+        "nome": "Carnaval",
+        "carnaval": true,
+        "valor": 299
+      }
+    ]
+  },
   "motor": {
     "_comentario": "Link do motor de reservas (HBook/HSystem) com {codigo_motor}, {checkin}, {checkout} (AAAA-MM-DD), {adultos}, {criancas}. Vazio = usa o checkout próprio. Preencher com o formato real do HBook do Rezende.",
     "link_modelo": ""

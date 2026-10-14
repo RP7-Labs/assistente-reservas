@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import { gerarHash, conferirSenha, criarToken, lerToken, normalizarEmail, emailValido } from "./auth.js";
-import { carregarHotel, noHotel, prepararHotel, limparCacheHoteis } from "./catalogo.js";
+import { carregarHotel, noHotel, prepararHotel, limparCacheHoteis, lerTarifas, tarifasParaTexto } from "./catalogo.js";
 import { hotelId, HOTEL_PADRAO, SLUG_RE, simulacaoPermitida } from "./tenant.js";
 import { PAISES } from "./paises.js";
 import {
@@ -234,7 +234,9 @@ export function validarCatalogo(b) {
   }
   const link = String(b.link_motor ?? "").trim();
   if (link && !MOTOR_RE.test(link)) return { erro: "Link do motor: precisa começar com https:// e ter {checkin}." };
-  return { quartos, politicas: String(b.politicas ?? "").trim().slice(0, 800), motor: { link_modelo: link } };
+  const t = lerTarifas(b.tarifas, b.tarifa_por_pessoa);
+  if (t.erro) return { erro: t.erro };
+  return { quartos, politicas: String(b.politicas ?? "").trim().slice(0, 800), motor: { link_modelo: link }, tarifas: t.tarifas };
 }
 
 // Grava um trecho da configuração do hotel no cadastro (tabela hoteis) e registra na auditoria
@@ -261,7 +263,8 @@ admin.put("/senha-envio", rota(async (req, res) => {
 
 admin.get("/catalogo", rota(async (_req, res) => {
   const h = carregarHotel();
-  res.json({ quartos: h.quartos.map((q) => Object.fromEntries(CAMPOS_QUARTO.map((c) => [c, q[c] ?? null]))), politicas: h.politicas ?? "", link_motor: h.motor?.link_modelo ?? "" });
+  res.json({ quartos: h.quartos.map((q) => Object.fromEntries(CAMPOS_QUARTO.map((c) => [c, q[c] ?? null]))), politicas: h.politicas ?? "", link_motor: h.motor?.link_modelo ?? "",
+    tarifas: tarifasParaTexto(h.tarifas), tarifa_por_pessoa: Boolean(h.tarifas?.por_pessoa) });
 }));
 
 // ---- Dados legais (vendedor, cancelamento, aluguel por temporada) e provas ----

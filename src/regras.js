@@ -1,6 +1,6 @@
 // Assistente sem IA: entende quarto, datas e pessoas por regras simples.
 // Funções puras: recebem o histórico de mensagens do hóspede e devolvem a resposta da última.
-import { validarPedido, precoTotal } from "./catalogo.js";
+import { validarPedido, textoAPartir, aPartirDe, resumoTarifas } from "./catalogo.js";
 import { sugerirPeriodo } from "./periodos.js";
 import { buscar, topicos, porTitulo } from "./conhecimento.js";
 
@@ -146,7 +146,7 @@ const MENU = [op("Fazer uma reserva"), op("Ver quartos e preços"), op("Dúvidas
 
 function botoes(campo, hotel, estado, hoje) {
   if (campo === "opcao") return estado.periodo.opcoes.map((o) => op(rotuloOpcao(o), textoOpcao(o)));
-  if (campo === "quarto") return hotel.quartos.map((q) => op(Number(q.preco_a_partir) > 0 ? `${q.nome} · ${reais(q.preco_a_partir)}` : q.nome, q.nome)).concat(op("Ver detalhes dos quartos"));
+  if (campo === "quarto") return hotel.quartos.map((q) => op(aPartirDe(q, hotel) ? `${q.nome} · ${reais(aPartirDe(q, hotel).valor)}` : q.nome, q.nome)).concat(op("Ver detalhes dos quartos"));
   if (campo === "checkin") {
     const fds = sugerirPeriodo("fim de semana", hoje);
     return [
@@ -243,13 +243,16 @@ function aplicar(estado, texto, hotel, hoje) {
   if (INTENCOES.quartos.test(t) || t === "ver detalhes dos quartos") {
     intencao = "info";
     quartosListados = true;
-    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. ${Number(q.preco_a_partir) > 0 ? `A partir de ${reais(q.preco_a_partir)} a diária.` : "Valor sob consulta com a equipe."}${q.preco_mensal ? ` Mensal: ${reais(q.preco_mensal)}.` : ""}`).join("\n"));
+    info.push("Nossos quartos:\n" + hotel.quartos.map((q) => `• ${q.nome}: ${q.descricao} Até ${plural(q.capacidade_total, "pessoa")}. ${textoAPartir(q, hotel) ? `${textoAPartir(q, hotel).replace(/^a/, "A")}.` : "Valor sob consulta com a equipe."}${q.preco_mensal ? ` Mensal: ${reais(q.preco_mensal)}.` : ""}`).join("\n"));
   } else if (INTENCOES.preco.test(t) && !entendeuAlgo) {
     intencao = "info";
     const q = hotel.quartos.find((x) => x.id === e.quarto);
-    info.push(q
-      ? `O ${q.nome} sai a partir de ${reais(q.preco_a_partir)} a diária. O valor final aparece na página de pagamento.`
-      : "As diárias começam em: " + hotel.quartos.map((x) => `${x.nome} ${reais(x.preco_a_partir)}`).join(", ") + ". O valor final aparece na página de pagamento.");
+    const tabela = resumoTarifas(hotel);
+    info.push(tabela
+      ? `Nossas diárias por temporada:\n${tabela}\nO valor final aparece na página de pagamento.`
+      : q
+        ? `O ${q.nome} sai ${textoAPartir(q, hotel) ?? "com preço sob consulta"}. O valor final aparece na página de pagamento.`
+        : "As diárias começam em: " + hotel.quartos.map((x) => `${x.nome} ${reais(aPartirDe(x, hotel)?.valor)}`).join(", ") + ". O valor final aparece na página de pagamento.");
   } else if (INTENCOES.duvidas.test(t)) {
     intencao = "duvidas";
   } else if (!entendeuAlgo && !INTENCOES.reservar.test(t)) {
@@ -300,10 +303,10 @@ export function responderPorRegras(hotel, mensagens, hoje = hojeSP()) {
       const v = validarPedido(hotel, pedido, new Date(hoje + "T12:00:00Z"));
       if (v.ok) {
         const pessoas = `${plural(pedido.adultos, "adulto")}${pedido.criancas ? ` e ${plural(pedido.criancas, "criança", "crianças")}` : ""}`;
-        const total = precoTotal(v.quarto, v.noites);
-        const mensal = total !== v.quarto.preco_a_partir * v.noites ? ` (preço de estadia mensal: ${reais(v.quarto.preco_mensal)} por mês)` : "";
+        const total = v.total;
+        const mensal = v.quarto.preco_mensal && v.noites >= (v.quarto.minimo_noites_mensal ?? 28) ? ` (preço de estadia mensal: ${reais(v.quarto.preco_mensal)} por mês)` : "";
         partes.push(`${variar(["Perfeito!", "Prontinho!", "Tudo certo!"], i)} ${v.quarto.nome}, de ${diaSemana(pedido.checkin)} ${br(pedido.checkin)} a ${diaSemana(checkout)} ${br(checkout)} (${plural(v.noites, "noite")}), ${pessoas}.\n` +
-          `Total a partir de ${reais(total)}${mensal}.\nPara garantir, finalize por este link: {link}`);
+          `Total: ${reais(total)}${mensal}.\nPara garantir, finalize por este link: {link}`);
         acao = { tipo: "link", pedido };
         estado = vazio();
         opcoes = [op("Tirar uma dúvida", "Dúvidas sobre o hotel"), op("Fazer outra reserva", "nova reserva"), op("Falar com atendente")];

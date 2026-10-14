@@ -1,7 +1,7 @@
 // IA com plano gratuito (Gemini ou Groq) pela API compatível com OpenAI.
 // Usa as mesmas ferramentas do modo Claude: link de reserva validado e chamar atendente.
 // As dúvidas vêm da base data/conhecimento.md (RAG local) e as datas de feriado são calculadas aqui.
-import { carregarHotel, validarPedido, montarLinkMotor, precoTotal } from "./catalogo.js";
+import { carregarHotel, validarPedido, montarLinkMotor, textoAPartir, resumoTarifas } from "./catalogo.js";
 import { criarLead } from "./store.js";
 import { hojeSP } from "./regras.js";
 import { sugerirPeriodo } from "./periodos.js";
@@ -45,9 +45,9 @@ Regras:
   com até 6 opções curtas (até 24 letras), escritas como o hóspede responderia. Para pedir uma data, inclua a opção "Escolher data". Exemplos: ao perguntar o quarto, liste os quartos; ao perguntar noites, "1 noite | 2 noites | 3 noites"; no começo, "Fazer uma reserva | Ver quartos e preços | Dúvidas sobre o hotel".
 
 Quartos (id: nome, capacidade, preço a partir de):
-${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. ${Number(q.preco_a_partir) > 0 ? `R$ ${q.preco_a_partir}/diária.` : "Preço não cadastrado: não informe valor, ofereça chamar a equipe."}${q.preco_mensal ? ` Estadia de ${q.minimo_noites_mensal ?? 28} noites ou mais: R$ ${q.preco_mensal}/mês.` : ""}`).join("\n")}
+${hotel.quartos.map((q) => `- ${q.id}: ${q.nome}. ${q.descricao} Até ${q.capacidade_adultos} adultos e ${q.capacidade_total} pessoas. ${textoAPartir(q, hotel) ? `Preço ${textoAPartir(q, hotel)}.` : "Preço não cadastrado: não informe valor, ofereça chamar a equipe."}${q.preco_mensal ? ` Estadia de ${q.minimo_noites_mensal ?? 28} noites ou mais: R$ ${q.preco_mensal}/mês.` : ""}`).join("\n")}
 
-Check-in a partir das ${hotel.checkin}; check-out até as ${hotel.checkout}. ${hotel.politicas}
+${resumoTarifas(hotel) ? `Tabela de diárias por temporada (vale para todos os quartos; o total exato vem da ferramenta e aparece na página de pagamento):\n${resumoTarifas(hotel)}\n\n` : ""}Check-in a partir das ${hotel.checkin}; check-out até as ${hotel.checkout}. ${hotel.politicas}
 
 Assuntos que você sabe responder: ${topicos().join(", ")}.
 ${achado ? `\nInformação do hotel relevante para a última mensagem (${achado.titulo}):\n${achado.resposta}\n` : ""}${periodo ? `\nO hóspede citou ${periodo.nome}. Sugira estas datas (já calculadas, use exatamente estas):\n${periodo.opcoes.map((o) => `- entrada ${o.checkin}, saída ${o.checkout}`).join("\n")}\n` : ""}`;
@@ -169,7 +169,7 @@ export async function responderComLLM({ historico, texto, canal, conversaId, pub
           const lead = await criarLead({ canal, conversa_id: conversaId, quarto_id: v.quarto.id, checkin: entrada.checkin, checkout: entrada.checkout, adultos: entrada.adultos, criancas: entrada.criancas, noites: v.noites });
           const link = publicUrl ? `${publicUrl}/r/${lead.id}` : montarLinkMotor(hotel, v.quarto, entrada, lead.id);
           eventos.push({ tipo: "link", lead_id: lead.id, quarto: v.quarto.nome, link });
-          conteudo = JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, total_a_partir: precoTotal(v.quarto, v.noites) });
+          conteudo = JSON.stringify({ link, quarto: v.quarto.nome, noites: v.noites, total: v.total });
         }
       } else if (b.name === "chamar_atendente") {
         pedirAtendente = String(b.input.motivo ?? "pedido do hóspede").slice(0, 200);
